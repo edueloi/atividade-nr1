@@ -12,7 +12,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
-import { StatCard } from '../../components/StatCard.js';
+import { StatCard } from '../../components/StatCard';
 import { 
   fetchAdmissionTemplates, 
   createAdmissionTemplate, 
@@ -20,7 +20,7 @@ import {
   createAdmissionEvaluation, 
   fetchAdmissionSummary,
   fetchUnits
-} from '../../services/api.js';
+} from '../../services/api';
 
 interface AdmissionalViewProps {
   tenant: { id: string; name: string };

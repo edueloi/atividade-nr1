@@ -13,7 +13,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
-import { StatCard } from '../../components/StatCard.js';
+import { StatCard } from '../../components/StatCard';
 import { 
   fetchAbsenteeismRecords, 
   createAbsenteeismRecord, 
@@ -27,7 +27,7 @@ import {
   uploadAbsenteeismAttachment,
   deleteAbsenteeismAttachment,
   fetchAbsenteeismHistory
-} from '../../services/api.js';
+} from '../../services/api';
 
 interface AbsenteeismViewProps {
   tenant: { id: string; name: string };

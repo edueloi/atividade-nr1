@@ -138,18 +138,60 @@ export function initDb() {
       FOREIGN KEY(professional_id) REFERENCES users(id)
     );
 
-    -- Funil Clínico (Queixas)
-    CREATE TABLE IF NOT EXISTS health_complaints (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      unit_id TEXT,
-      sector_id TEXT,
-      type TEXT CHECK(type IN ('ambulatory', 'momentary')),
+    -- Funil Clínico (Queixas) - Overhauled
+    CREATE TABLE IF NOT EXISTS complaints (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      unit_id TEXT NOT NULL,
+      sector_id TEXT NOT NULL,
+      shift_id TEXT,
+      type TEXT CHECK(type IN ('MOMENTARY', 'AMBULATORY')) NOT NULL,
       body_part TEXT NOT NULL, -- ombro, lombar, etc.
-      severity INTEGER CHECK(severity BETWEEN 1 AND 5),
-      recurrent BOOLEAN DEFAULT 0,
-      date DATE NOT NULL,
+      severity TEXT CHECK(severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')) NOT NULL,
+      status TEXT CHECK(status IN ('OPEN', 'TRACKING', 'REFERRED', 'RESOLVED', 'RECURRENT', 'ESCALATED')) DEFAULT 'OPEN',
+      is_recurrent BOOLEAN DEFAULT 0,
+      description TEXT,
+      initial_action_json TEXT, -- JSON array of actions
+      created_by TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id),
       FOREIGN KEY(unit_id) REFERENCES units(id),
       FOREIGN KEY(sector_id) REFERENCES sectors(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS complaint_timeline (
+      id TEXT PRIMARY KEY,
+      complaint_id TEXT NOT NULL,
+      action_type TEXT CHECK(action_type IN ('CREATE', 'STATUS_CHANGE', 'NOTE', 'REFERRAL')) NOT NULL,
+      note TEXT,
+      from_status TEXT,
+      to_status TEXT,
+      created_by TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(complaint_id) REFERENCES complaints(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS complaint_referrals (
+      id TEXT PRIMARY KEY,
+      complaint_id TEXT NOT NULL,
+      target_module TEXT CHECK(target_module IN ('FISIO', 'AMBULATORY', 'ERGO', 'ABSENTEEISM')) NOT NULL,
+      priority TEXT CHECK(priority IN ('LOW', 'MEDIUM', 'HIGH')) DEFAULT 'MEDIUM',
+      assigned_to TEXT,
+      status TEXT CHECK(status IN ('OPEN', 'DONE')) DEFAULT 'OPEN',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(complaint_id) REFERENCES complaints(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS complaint_attachments (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      complaint_id TEXT NOT NULL,
+      file_url TEXT NOT NULL,
+      thumb_url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id),
+      FOREIGN KEY(complaint_id) REFERENCES complaints(id)
     );
 
     -- Absenteísmo (CIDs)
@@ -219,27 +261,73 @@ export function initDb() {
       FOREIGN KEY(unit_id) REFERENCES units(id)
     );
 
-    -- NR1 Psicossocial
+    -- NR1 Psicossocial (Overhauled)
     CREATE TABLE IF NOT EXISTS nr1_forms (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id TEXT,
-      title TEXT NOT NULL,
-      questions_json TEXT NOT NULL,
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      name TEXT NOT NULL,
       version INTEGER DEFAULT 1,
-      active BOOLEAN DEFAULT 1,
+      status TEXT CHECK(status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED')) DEFAULT 'DRAFT',
+      fields_json TEXT NOT NULL,
+      scoring_json TEXT,
+      privacy_json TEXT,
+      created_by TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(tenant_id) REFERENCES tenants(id)
     );
 
-    CREATE TABLE IF NOT EXISTS nr1_responses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      form_id INTEGER,
-      unit_id TEXT,
-      sector_id TEXT,
-      answers_json TEXT NOT NULL,
-      submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CREATE TABLE IF NOT EXISTS nr1_cycles (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      form_id TEXT NOT NULL,
+      form_version INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      status TEXT CHECK(status IN ('DRAFT', 'ACTIVE', 'CLOSED')) DEFAULT 'DRAFT',
+      unit_id TEXT NOT NULL,
+      sectors_json TEXT NOT NULL, -- JSON array of sector IDs
+      privacy_json TEXT,
+      public_token TEXT UNIQUE NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id),
       FOREIGN KEY(form_id) REFERENCES nr1_forms(id),
-      FOREIGN KEY(unit_id) REFERENCES units(id),
-      FOREIGN KEY(sector_id) REFERENCES sectors(id)
+      FOREIGN KEY(unit_id) REFERENCES units(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS nr1_responses (
+      id TEXT PRIMARY KEY,
+      cycle_id TEXT NOT NULL,
+      sector_id TEXT, -- Can be a "tag" or ID
+      submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      answers_json TEXT NOT NULL,
+      score_total REAL,
+      score_blocks_json TEXT,
+      status TEXT CHECK(status IN ('VALID', 'INVALID')) DEFAULT 'VALID',
+      FOREIGN KEY(cycle_id) REFERENCES nr1_cycles(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS nr1_aggregate_cache (
+      cycle_id TEXT NOT NULL,
+      sector_id TEXT NOT NULL,
+      responses_count INTEGER DEFAULT 0,
+      score_avg REAL DEFAULT 0,
+      score_blocks_avg_json TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (cycle_id, sector_id),
+      FOREIGN KEY(cycle_id) REFERENCES nr1_cycles(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS report_jobs (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      params_json TEXT,
+      status TEXT CHECK(status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')) DEFAULT 'PENDING',
+      file_url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id)
     );
 
     -- Action Plans & Evidence

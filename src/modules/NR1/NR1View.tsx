@@ -1,43 +1,96 @@
-import React from 'react';
-import { motion } from 'motion/react';
-import { CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  LayoutDashboard, 
+  RefreshCw, 
+  FileText, 
+  Users, 
+  ShieldCheck,
+  Plus
+} from 'lucide-react';
+import { NR1Dashboard } from './tabs/NR1Dashboard';
+import { NR1Cycles } from './tabs/NR1Cycles';
+import { NR1Forms } from './tabs/NR1Forms';
+import { NR1Responses } from './tabs/NR1Responses';
+import { NR1Reports } from './tabs/NR1Reports';
 
-function NR1Card({ title, value, trend }: { title: string, value: string, trend: string }) {
-  return (
-    <div className="p-6 bg-zinc-50 rounded-2xl border border-zinc-200">
-      <p className="text-[10px] uppercase font-bold text-zinc-400 mb-2">{title}</p>
-      <h4 className="text-3xl font-bold mb-1">{value}</h4>
-      <p className="text-[10px] font-bold text-emerald-600">{trend}</p>
-    </div>
-  );
-}
+type TabType = 'dashboard' | 'cycles' | 'forms' | 'responses' | 'reports';
 
 export function NR1View() {
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+
+  const tabs = [
+    { id: 'dashboard', label: 'Visão', icon: LayoutDashboard },
+    { id: 'cycles', label: 'Ciclos', icon: RefreshCw },
+    { id: 'forms', label: 'Formulários', icon: FileText },
+    { id: 'responses', label: 'Respostas', icon: Users },
+    { id: 'reports', label: 'Relatórios & Auditoria', icon: ShieldCheck },
+  ];
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <div className="bg-white border border-zinc-200 rounded-3xl p-8 shadow-sm">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h3 className="text-xl font-bold">Mapeamento Psicossocial (NR1)</h3>
-            <p className="text-zinc-500 text-sm">Embrião de mapeamento de saúde mental</p>
-          </div>
-          <button className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold">Novo Questionário</button>
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }} 
+      animate={{ opacity: 1, y: 0 }} 
+      className="space-y-6"
+    >
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-zinc-900">NR1 Psicossocial</h2>
+          <p className="text-zinc-500 text-sm">Gestão de riscos psicossociais e governança de saúde mental</p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <NR1Card title="Ansiedade" value="12%" trend="Estável" />
-          <NR1Card title="Burnout" value="4%" trend="-2%" />
-          <NR1Card title="Satisfação" value="88%" trend="+5%" />
+        <div className="flex items-center gap-2">
+          {activeTab === 'cycles' && (
+            <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors">
+              <Plus size={18} />
+              Novo Ciclo
+            </button>
+          )}
+          {activeTab === 'forms' && (
+            <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors">
+              <Plus size={18} />
+              Novo Formulário
+            </button>
+          )}
         </div>
+      </div>
 
-        <div className="mt-8 p-6 bg-zinc-50 rounded-2xl border border-zinc-200">
-          <h4 className="font-bold mb-4">Perguntas Ativas (Mapeamento Leve)</h4>
-          <div className="space-y-3">
-            <p className="text-sm text-zinc-600 flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-500" /> "Como você avalia seu nível de estresse hoje?"</p>
-            <p className="text-sm text-zinc-600 flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-500" /> "Você sente que tem suporte da sua liderança?"</p>
-            <p className="text-sm text-zinc-600 flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-500" /> "Teve dificuldades para dormir devido ao trabalho?"</p>
-          </div>
-        </div>
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-1 p-1 bg-zinc-100 rounded-2xl w-fit">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as TabType)}
+            className={`
+              flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all
+              ${activeTab === tab.id 
+                ? 'bg-white text-emerald-600 shadow-sm' 
+                : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50'}
+            `}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div className="min-h-[600px]">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {activeTab === 'dashboard' && <NR1Dashboard onNavigate={setActiveTab} />}
+            {activeTab === 'cycles' && <NR1Cycles />}
+            {activeTab === 'forms' && <NR1Forms />}
+            {activeTab === 'responses' && <NR1Responses />}
+            {activeTab === 'reports' && <NR1Reports />}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </motion.div>
   );

@@ -17,28 +17,50 @@ interface SidebarProps {
   setActiveTab: (tab: string) => void;
   userRole: string;
   onLogout: () => void;
+  onBackToAdmin?: () => void;
 }
 
-export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, userRole, onLogout }: SidebarProps) {
+export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, userRole, onLogout, onBackToAdmin }: SidebarProps) {
   return (
     <motion.aside 
       initial={false}
       animate={{ width: collapsed ? 80 : 280 }}
       className="bg-white border-r border-zinc-200 flex flex-col h-screen sticky top-0 z-50 shadow-sm"
     >
-      <div className="p-6 flex items-center justify-between">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200">
+      <div className="p-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          {!collapsed && (
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200">
+                <Activity className="text-white" size={18} />
+              </div>
+              <span className="font-bold text-lg tracking-tight text-zinc-900">Atividade SST</span>
+            </div>
+          )}
+          {collapsed && (
+            <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-200">
               <Activity className="text-white" size={18} />
             </div>
-            <span className="font-bold text-lg tracking-tight text-zinc-900">Atividade SST</span>
-          </div>
+          )}
+        </div>
+
+        {onBackToAdmin && !collapsed && (
+          <button 
+            onClick={onBackToAdmin}
+            className="w-full p-3 bg-zinc-900 text-white rounded-2xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-200"
+          >
+            <ShieldAlert size={14} />
+            Painel Admin
+          </button>
         )}
-        {collapsed && (
-          <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-200">
-            <Activity className="text-white" size={18} />
-          </div>
+        {onBackToAdmin && collapsed && (
+          <button 
+            onClick={onBackToAdmin}
+            className="w-12 h-12 bg-zinc-900 text-white rounded-2xl flex items-center justify-center mx-auto hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-200"
+            title="Voltar ao Painel Admin"
+          >
+            <ShieldAlert size={18} />
+          </button>
         )}
       </div>
 

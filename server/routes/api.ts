@@ -16,23 +16,194 @@ router.get("/units/:tenantId", (req, res) => {
 
 router.get("/dashboard/stats/:tenantId", (req, res) => {
   const { tenantId } = req.params;
-  // Mocking some stats for the dashboard based on tenant
+  
+  const momentary = db.prepare("SELECT count(*) as count FROM complaints WHERE tenant_id = ? AND type = 'MOMENTARY'").get(tenantId) as any;
+  const ambulatory = db.prepare("SELECT count(*) as count FROM complaints WHERE tenant_id = ? AND type = 'AMBULATORY'").get(tenantId) as any;
+  const recurrent = db.prepare("SELECT count(*) as count FROM complaints WHERE tenant_id = ? AND is_recurrent = 1").get(tenantId) as any;
+  const resolved = db.prepare("SELECT count(*) as count FROM complaints WHERE tenant_id = ? AND status = 'RESOLVED'").get(tenantId) as any;
+
   const stats = {
     participation: 84.2,
-    complaints_momentary: 12,
-    complaints_ambulatory: 8,
+    complaints_momentary: momentary.count,
+    complaints_ambulatory: ambulatory.count,
+    complaints_recurrent: recurrent.count,
+    complaints_resolved: resolved.count,
     absenteismo: 4.5,
     rehabilitated: 76
   };
   res.json(stats);
 });
 
+// --- Funil Clínico (Queixas) ---
+router.post("/complaints", (req, res) => {
+  const { id, tenant_id, unit_id, sector_id, shift_id, type, body_part, severity, description, initial_action_json, created_by } = req.body;
+  
+  db.transaction(() => {
+    db.prepare(`
+      INSERT INTO complaints (id, tenant_id, unit_id, sector_id, shift_id, type, body_part, severity, description, initial_action_json, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, tenant_id, unit_id, sector_id, shift_id, type, body_part, severity, description, JSON.stringify(initial_action_json || []), created_by);
+    
+    // Initial timeline entry
+    const timelineId = `tl-${Date.now()}`;
+    db.prepare(`
+      INSERT INTO complaint_timeline (id, complaint_id, action_type, note, to_status, created_by)
+      VALUES (?, ?, 'CREATE', 'Queixa registrada', 'OPEN', ?)
+    `).run(timelineId, id, created_by);
+  })();
+  
+  res.json({ success: true });
+});
+
+router.get("/complaints", (req, res) => {
+  const { tenantId, from, to, unitId, sectorId, type, status, severity, bodyPart } = req.query;
+  let query = `
+    SELECT c.*, u.name as unit_name, s.name as sector_name, usr.name as creator_name
+    FROM complaints c
+    JOIN units u ON c.unit_id = u.id
+    JOIN sectors s ON c.sector_id = s.id
+    JOIN users usr ON c.created_by = usr.id
+    WHERE c.tenant_id = ?
+  `;
+  const params: any[] = [tenantId];
+
+  if (from && to) {
+    query += " AND c.created_at BETWEEN ? AND ?";
+    params.push(from, to);
+  }
+  if (unitId) {
+    query += " AND c.unit_id = ?";
+    params.push(unitId);
+  }
+  if (sectorId) {
+    query += " AND c.sector_id = ?";
+    params.push(sectorId);
+  }
+  if (type) {
+    query += " AND c.type = ?";
+    params.push(type);
+  }
+  if (status) {
+    query += " AND c.status = ?";
+    params.push(status);
+  }
+  if (severity) {
+    query += " AND c.severity = ?";
+    params.push(severity);
+  }
+  if (bodyPart) {
+    query += " AND c.body_part = ?";
+    params.push(bodyPart);
+  }
+
+  query += " ORDER BY c.created_at DESC";
+  const records = db.prepare(query).all(...params);
+  res.json(records.map((r: any) => ({ ...r, initial_action_json: JSON.parse(r.initial_action_json || '[]') })));
+});
+
+router.get("/complaints/:id", (req, res) => {
+  const record = db.prepare(`
+    SELECT c.*, u.name as unit_name, s.name as sector_name, usr.name as creator_name
+    FROM complaints c
+    JOIN units u ON c.unit_id = u.id
+    JOIN sectors s ON c.sector_id = s.id
+    JOIN users usr ON c.created_by = usr.id
+    WHERE c.id = ?
+  `).get(req.params.id) as any;
+  
+  if (record) {
+    record.initial_action_json = JSON.parse(record.initial_action_json || '[]');
+  }
+  res.json(record);
+});
+
+router.put("/complaints/:id", (req, res) => {
+  const { id } = req.params;
+  const { unit_id, sector_id, shift_id, type, body_part, severity, description, initial_action_json, updated_by } = req.body;
+  
+  db.prepare(`
+    UPDATE complaints 
+    SET unit_id = ?, sector_id = ?, shift_id = ?, type = ?, body_part = ?, severity = ?, description = ?, initial_action_json = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(unit_id, sector_id, shift_id, type, body_part, severity, description, JSON.stringify(initial_action_json || []), id);
+  
+  res.json({ success: true });
+});
+
+router.patch("/complaints/:id/status", (req, res) => {
+  const { id } = req.params;
+  const { status, note, updated_by } = req.body;
+  
+  const before = db.prepare("SELECT status FROM complaints WHERE id = ?").get(id) as any;
+  
+  db.transaction(() => {
+    db.prepare("UPDATE complaints SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(status, id);
+    
+    const timelineId = `tl-${Date.now()}`;
+    db.prepare(`
+      INSERT INTO complaint_timeline (id, complaint_id, action_type, note, from_status, to_status, created_by)
+      VALUES (?, ?, 'STATUS_CHANGE', ?, ?, ?, ?)
+    `).run(timelineId, id, note || 'Alteração de status', before.status, status, updated_by);
+  })();
+  
+  res.json({ success: true });
+});
+
+router.post("/complaints/:id/timeline", (req, res) => {
+  const { id: complaintId } = req.params;
+  const { action_type, note, created_by } = req.body;
+  const id = `tl-${Date.now()}`;
+  
+  db.prepare(`
+    INSERT INTO complaint_timeline (id, complaint_id, action_type, note, created_by)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, complaintId, action_type, note, created_by);
+  
+  res.json({ success: true, id });
+});
+
+router.get("/complaints/:id/timeline", (req, res) => {
+  const timeline = db.prepare(`
+    SELECT t.*, usr.name as user_name
+    FROM complaint_timeline t
+    JOIN users usr ON t.created_by = usr.id
+    WHERE t.complaint_id = ?
+    ORDER BY t.created_at DESC
+  `).all(req.params.id);
+  res.json(timeline);
+});
+
+router.post("/complaints/:id/referrals", (req, res) => {
+  const { id: complaintId } = req.params;
+  const { target_module, priority, assigned_to, note, created_by } = req.body;
+  const id = `ref-${Date.now()}`;
+  
+  db.transaction(() => {
+    db.prepare(`
+      INSERT INTO complaint_referrals (id, complaint_id, target_module, priority, assigned_to)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, complaintId, target_module, priority, assigned_to);
+    
+    const timelineId = `tl-${Date.now()}`;
+    db.prepare(`
+      INSERT INTO complaint_timeline (id, complaint_id, action_type, note, created_by)
+      VALUES (?, ?, 'REFERRAL', ?, ?)
+    `).run(timelineId, complaintId, `Encaminhado para ${target_module}: ${note}`, created_by);
+    
+    // Also update complaint status
+    db.prepare("UPDATE complaints SET status = 'REFERRED' WHERE id = ?").run(complaintId);
+  })();
+  
+  res.json({ success: true, id });
+});
+
 router.get("/complaints/body-parts/:tenantId", (req, res) => {
   const stats = db.prepare(`
     SELECT body_part, count(*) as value 
-    FROM health_complaints 
+    FROM complaints 
+    WHERE tenant_id = ?
     GROUP BY body_part
-  `).all();
+  `).all(req.params.tenantId);
   res.json(stats);
 });
 
@@ -378,9 +549,268 @@ router.get("/reports/absenteeism/summary", (req, res) => {
   });
 });
 
-router.get("/nr1/forms/:tenantId", (req, res) => {
-  const forms = db.prepare("SELECT * FROM nr1_forms WHERE tenant_id = ? AND active = 1").all(req.params.tenantId);
-  res.json(forms);
+// --- NR1 Psicossocial (Overhauled) ---
+router.get("/nr1/forms", (req, res) => {
+  const { tenantId } = req.query;
+  const forms = db.prepare("SELECT * FROM nr1_forms WHERE tenant_id = ? ORDER BY created_at DESC").all(tenantId);
+  res.json(forms.map((f: any) => ({ 
+    ...f, 
+    fields_json: JSON.parse(f.fields_json),
+    scoring_json: JSON.parse(f.scoring_json || '{}'),
+    privacy_json: JSON.parse(f.privacy_json || '{}')
+  })));
+});
+
+router.post("/nr1/forms", (req, res) => {
+  const { id, tenant_id, name, fields_json, scoring_json, privacy_json, created_by } = req.body;
+  db.prepare(`
+    INSERT INTO nr1_forms (id, tenant_id, name, fields_json, scoring_json, privacy_json, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, tenant_id, name, JSON.stringify(fields_json), JSON.stringify(scoring_json), JSON.stringify(privacy_json), created_by);
+  res.json({ success: true });
+});
+
+router.get("/nr1/forms/:id", (req, res) => {
+  const form = db.prepare("SELECT * FROM nr1_forms WHERE id = ?").get(req.params.id) as any;
+  if (!form) return res.status(404).json({ error: "Form not found" });
+  res.json({
+    ...form,
+    fields_json: JSON.parse(form.fields_json),
+    scoring_json: JSON.parse(form.scoring_json || '{}'),
+    privacy_json: JSON.parse(form.privacy_json || '{}')
+  });
+});
+
+router.put("/nr1/forms/:id", (req, res) => {
+  const { id } = req.params;
+  const { name, fields_json, scoring_json, privacy_json } = req.body;
+  db.prepare(`
+    UPDATE nr1_forms 
+    SET name = ?, fields_json = ?, scoring_json = ?, privacy_json = ?
+    WHERE id = ? AND status = 'DRAFT'
+  `).run(name, JSON.stringify(fields_json), JSON.stringify(scoring_json), JSON.stringify(privacy_json), id);
+  res.json({ success: true });
+});
+
+router.post("/nr1/forms/:id/publish", (req, res) => {
+  db.prepare("UPDATE nr1_forms SET status = 'PUBLISHED' WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+router.post("/nr1/forms/:id/duplicate", (req, res) => {
+  const { id } = req.params;
+  const { newId, created_by } = req.body;
+  const form = db.prepare("SELECT * FROM nr1_forms WHERE id = ?").get(id) as any;
+  if (!form) return res.status(404).json({ error: "Form not found" });
+  
+  db.prepare(`
+    INSERT INTO nr1_forms (id, tenant_id, name, version, status, fields_json, scoring_json, privacy_json, created_by)
+    VALUES (?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?)
+  `).run(newId, form.tenant_id, `${form.name} (Cópia)`, form.version + 1, form.fields_json, form.scoring_json, form.privacy_json, created_by);
+  
+  res.json({ success: true });
+});
+
+router.patch("/nr1/forms/:id/archive", (req, res) => {
+  db.prepare("UPDATE nr1_forms SET status = 'ARCHIVED' WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+// Cycles
+router.get("/nr1/cycles", (req, res) => {
+  const { tenantId, status } = req.query;
+  let query = "SELECT c.*, f.name as form_name FROM nr1_cycles c JOIN nr1_forms f ON c.form_id = f.id WHERE c.tenant_id = ?";
+  const params: any[] = [tenantId];
+  if (status) {
+    query += " AND c.status = ?";
+    params.push(status);
+  }
+  query += " ORDER BY c.created_at DESC";
+  const cycles = db.prepare(query).all(...params);
+  res.json(cycles.map((c: any) => ({
+    ...c,
+    sectors_json: JSON.parse(c.sectors_json),
+    privacy_json: JSON.parse(c.privacy_json || '{}')
+  })));
+});
+
+router.post("/nr1/cycles", (req, res) => {
+  const { id, tenant_id, form_id, form_version, name, start_date, end_date, unit_id, sectors_json, privacy_json, public_token, created_by } = req.body;
+  db.prepare(`
+    INSERT INTO nr1_cycles (id, tenant_id, form_id, form_version, name, start_date, end_date, unit_id, sectors_json, privacy_json, public_token, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, tenant_id, form_id, form_version, name, start_date, end_date, unit_id, JSON.stringify(sectors_json), JSON.stringify(privacy_json), public_token, created_by);
+  res.json({ success: true });
+});
+
+router.get("/nr1/cycles/:id", (req, res) => {
+  const cycle = db.prepare(`
+    SELECT c.*, f.name as form_name, f.fields_json as form_fields
+    FROM nr1_cycles c 
+    JOIN nr1_forms f ON c.form_id = f.id 
+    WHERE c.id = ?
+  `).get(req.params.id) as any;
+  if (!cycle) return res.status(404).json({ error: "Cycle not found" });
+  res.json({
+    ...cycle,
+    sectors_json: JSON.parse(cycle.sectors_json),
+    privacy_json: JSON.parse(cycle.privacy_json || '{}'),
+    form_fields: JSON.parse(cycle.form_fields)
+  });
+});
+
+router.post("/nr1/cycles/:id/activate", (req, res) => {
+  db.prepare("UPDATE nr1_cycles SET status = 'ACTIVE' WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+router.post("/nr1/cycles/:id/close", (req, res) => {
+  db.prepare("UPDATE nr1_cycles SET status = 'CLOSED' WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+router.delete("/nr1/cycles/:id", (req, res) => {
+  db.prepare("DELETE FROM nr1_cycles WHERE id = ? AND status = 'DRAFT'").run(req.params.id);
+  res.json({ success: true });
+});
+
+// Public Submission
+router.get("/nr1/public/:publicToken", (req, res) => {
+  const cycle = db.prepare(`
+    SELECT c.*, f.name as form_name, f.fields_json as form_fields
+    FROM nr1_cycles c 
+    JOIN nr1_forms f ON c.form_id = f.id 
+    WHERE c.public_token = ? AND c.status = 'ACTIVE'
+  `).get(req.params.publicToken) as any;
+  
+  if (!cycle) return res.status(404).json({ error: "Cycle not found or inactive" });
+  
+  res.json({
+    id: cycle.id,
+    name: cycle.name,
+    form_name: cycle.form_name,
+    form_fields: JSON.parse(cycle.form_fields),
+    unit_id: cycle.unit_id,
+    sectors: JSON.parse(cycle.sectors_json)
+  });
+});
+
+router.post("/nr1/public/:publicToken/submit", (req, res) => {
+  const { publicToken } = req.params;
+  const { sectorId, answers, scoreTotal, scoreBlocks } = req.body;
+  
+  const cycle = db.prepare("SELECT id FROM nr1_cycles WHERE public_token = ? AND status = 'ACTIVE'").get(publicToken) as any;
+  if (!cycle) return res.status(404).json({ error: "Cycle not found or inactive" });
+  
+  const responseId = `resp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  db.transaction(() => {
+    db.prepare(`
+      INSERT INTO nr1_responses (id, cycle_id, sector_id, answers_json, score_total, score_blocks_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(responseId, cycle.id, sectorId, JSON.stringify(answers), scoreTotal, JSON.stringify(scoreBlocks));
+    
+    // Update aggregate cache (simplified for now)
+    const existing = db.prepare("SELECT * FROM nr1_aggregate_cache WHERE cycle_id = ? AND sector_id = ?").get(cycle.id, sectorId) as any;
+    if (existing) {
+      const newCount = existing.responses_count + 1;
+      const newScoreAvg = (existing.score_avg * existing.responses_count + scoreTotal) / newCount;
+      db.prepare(`
+        UPDATE nr1_aggregate_cache 
+        SET responses_count = ?, score_avg = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE cycle_id = ? AND sector_id = ?
+      `).run(newCount, newScoreAvg, cycle.id, sectorId);
+    } else {
+      db.prepare(`
+        INSERT INTO nr1_aggregate_cache (cycle_id, sector_id, responses_count, score_avg)
+        VALUES (?, ?, 1, ?)
+      `).run(cycle.id, sectorId, scoreTotal);
+    }
+  })();
+  
+  res.json({ success: true });
+});
+
+// Dashboard / Summary
+router.get("/nr1/dashboard", (req, res) => {
+  const { cycleId } = req.query;
+  const cycle = db.prepare("SELECT * FROM nr1_cycles WHERE id = ?").get(cycleId) as any;
+  if (!cycle) return res.status(404).json({ error: "Cycle not found" });
+  
+  const aggregates = db.prepare(`
+    SELECT ac.*, s.name as sector_name
+    FROM nr1_aggregate_cache ac
+    JOIN sectors s ON ac.sector_id = s.id
+    WHERE ac.cycle_id = ?
+  `).all(cycleId);
+  
+  const totalResponses = aggregates.reduce((acc: number, curr: any) => acc + curr.responses_count, 0);
+  const avgScore = aggregates.length > 0 
+    ? aggregates.reduce((acc: number, curr: any) => acc + curr.score_avg, 0) / aggregates.length 
+    : 0;
+    
+  res.json({
+    cycle,
+    totalResponses,
+    avgScore,
+    aggregates
+  });
+});
+
+router.get("/nr1/summary/by-sector", (req, res) => {
+  const { cycleId } = req.query;
+  const aggregates = db.prepare(`
+    SELECT ac.*, s.name as sector_name
+    FROM nr1_aggregate_cache ac
+    JOIN sectors s ON ac.sector_id = s.id
+    WHERE ac.cycle_id = ?
+  `).all(cycleId);
+  res.json(aggregates);
+});
+
+router.get("/nr1/responses", (req, res) => {
+  const { cycleId } = req.query;
+  const responses = db.prepare(`
+    SELECT r.*, s.name as sector_name
+    FROM nr1_responses r
+    LEFT JOIN sectors s ON r.sector_id = s.id
+    WHERE r.cycle_id = ?
+    ORDER BY r.submitted_at DESC
+  `).all(cycleId);
+  res.json(responses.map((r: any) => ({
+    ...r,
+    answers_json: JSON.parse(r.answers_json),
+    score_blocks_json: JSON.parse(r.score_blocks_json || '{}')
+  })));
+});
+
+// Reports
+router.post("/reports/nr1/pdf", (req, res) => {
+  const { tenantId, type, params } = req.body;
+  const id = `job-${Date.now()}`;
+  db.prepare(`
+    INSERT INTO report_jobs (id, tenant_id, type, params_json, status)
+    VALUES (?, ?, ?, ?, 'PENDING')
+  `).run(id, tenantId, type, JSON.stringify(params));
+  
+  // Simulate processing
+  setTimeout(() => {
+    db.prepare("UPDATE report_jobs SET status = 'COMPLETED', file_url = ? WHERE id = ?")
+      .run(`/uploads/reports/nr1_${id}.pdf`, id);
+  }, 2000);
+  
+  res.json({ jobId: id });
+});
+
+router.get("/reports/jobs/:jobId", (req, res) => {
+  const job = db.prepare("SELECT * FROM report_jobs WHERE id = ?").get(req.params.jobId);
+  res.json(job);
+});
+
+router.get("/reports/nr1/history", (req, res) => {
+  const { tenantId } = req.query;
+  const history = db.prepare("SELECT * FROM report_jobs WHERE tenant_id = ? ORDER BY created_at DESC").all(tenantId);
+  res.json(history);
 });
 
 // --- Admissional (Cinesiofuncional) ---

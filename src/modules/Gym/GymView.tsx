@@ -11,7 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, LineChart, Line, Legend
 } from 'recharts';
-import { fetchTodayClasses, startClassSession, saveAttendance, finishClassSession, fetchSchedules, fetchAttendanceSummary } from '../../services/api.js';
+import { fetchTodayClasses, startClassSession, saveAttendance, finishClassSession, fetchSchedules, fetchAttendanceSummary } from '../../services/api';
 
 interface GymViewProps {
   tenant: { id: string; name: string };

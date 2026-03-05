@@ -17,6 +17,7 @@ import { GymView } from './modules/Gym/GymView.js';
 import { PhysioView } from './modules/Physio/PhysioView.js';
 import { ComplaintsView } from './modules/Complaints/ComplaintsView.js';
 import { NR1View } from './modules/NR1/NR1View.js';
+import { ExternalForm } from './modules/NR1/ExternalForm.js';
 import { ErgoEngView } from './modules/Ergo/ErgoEngView.js';
 import { AdmissionalView } from './modules/Admissional/AdmissionalView.js';
 import { AbsenteeismView } from './modules/Absenteeism/AbsenteeismView.js';
@@ -51,6 +52,16 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showQuickLaunch, setShowQuickLaunch] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [externalToken, setExternalToken] = useState<string | null>(null);
+
+  // Check for external NR1 route
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/nr1/s/')) {
+      const token = path.split('/').pop();
+      if (token) setExternalToken(token);
+    }
+  }, []);
 
   // Mock initial data
   useEffect(() => {
@@ -69,7 +80,13 @@ export default function App() {
       tenantId: tenantId || undefined,
       tenantName: tenant?.name
     });
-    if (tenant) setSelectedTenant(tenant);
+    
+    if (role === 'admin_atividade' && !tenantId) {
+      setActiveTab('admin');
+    } else if (tenant) {
+      setSelectedTenant(tenant);
+      setActiveTab('home');
+    }
   };
 
   const handleLogout = () => {
@@ -78,15 +95,20 @@ export default function App() {
     setActiveTab('home');
   };
 
+  const handleBackToAdmin = () => {
+    setSelectedTenant(null);
+    setActiveTab('admin');
+  };
+
+  if (externalToken) {
+    return <ExternalForm token={externalToken} />;
+  }
+
   if (!user) {
     return <LoginView tenants={tenants} onLogin={handleLogin} />;
   }
 
-  if (user.role === 'admin_atividade' && !selectedTenant && activeTab !== 'admin') {
-    return <TenantSelectionView tenants={tenants} onSelect={setSelectedTenant} />;
-  }
-
-  const currentTenantName = selectedTenant?.name || user.tenantName || 'Atividade Laboral';
+  const currentTenantName = selectedTenant?.name || user.tenantName || (user.role === 'admin_atividade' ? 'Painel Global' : 'Atividade Laboral');
 
   return (
     <div className="min-h-screen bg-zinc-50 flex">
@@ -97,6 +119,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         userRole={user.role}
         onLogout={handleLogout}
+        onBackToAdmin={user.role === 'admin_atividade' && selectedTenant ? handleBackToAdmin : undefined}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -147,7 +170,16 @@ export default function App() {
             {activeTab === 'campaigns' && <CampaignsView key="campaigns" />}
             {activeTab === 'closing' && <ClosingView key="closing" />}
             {activeTab === 'reports' && <ReportsView key="reports" />}
-            {activeTab === 'admin' && <AdminView key="admin" />}
+            {activeTab === 'admin' && (
+              <AdminView 
+                key="admin" 
+                tenants={tenants} 
+                onSelectTenant={(t) => {
+                  setSelectedTenant(t);
+                  setActiveTab('home');
+                }} 
+              />
+            )}
           </AnimatePresence>
         </main>
       </div>
