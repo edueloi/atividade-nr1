@@ -191,40 +191,34 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900">Absenteísmo</h1>
-          <p className="text-zinc-500">Gestão e análise de atestados e afastamentos.</p>
-        </div>
-        <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-zinc-200 shadow-sm">
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-1 p-1 bg-zinc-100/50 rounded-2xl w-fit border border-zinc-200/50">
+        <button 
+          onClick={() => setActiveSubTab('summary')}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'summary' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
+        >
+          Resumo
+        </button>
+        <button 
+          onClick={() => setActiveSubTab('list')}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'list' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
+        >
+          Atestados
+        </button>
+        <button 
+          onClick={() => setActiveSubTab('analysis')}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'analysis' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
+        >
+          Análises
+        </button>
+        {isAdmin && (
           <button 
-            onClick={() => setActiveSubTab('summary')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'summary' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-50'}`}
+            onClick={() => setActiveSubTab('config')}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'config' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
           >
-            Resumo
+            Config
           </button>
-          <button 
-            onClick={() => setActiveSubTab('list')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'list' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-50'}`}
-          >
-            Atestados
-          </button>
-          <button 
-            onClick={() => setActiveSubTab('analysis')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'analysis' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-50'}`}
-          >
-            Análises
-          </button>
-          {isAdmin && (
-            <button 
-              onClick={() => setActiveSubTab('config')}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'config' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-50'}`}
-            >
-              Config
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Content */}

@@ -36,34 +36,17 @@ export function ComplaintsView() {
       animate={{ opacity: 1, y: 0 }} 
       className="space-y-6"
     >
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-zinc-900">Gestão de Queixas</h2>
-          <p className="text-zinc-500 text-sm">Monitoramento preventivo e ambulatorial de sintomas e dores</p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => handleNavigate('list')}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/10"
-          >
-            <Plus size={18} />
-            Novo Registro
-          </button>
-        </div>
-      </div>
-
       {/* Tabs Navigation */}
-      <div className="flex items-center gap-1 p-1 bg-zinc-100 rounded-2xl w-fit">
+      <div className="flex items-center gap-1 p-1 bg-zinc-100/50 rounded-2xl w-fit border border-zinc-200/50">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => handleNavigate(tab.id)}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all
+              flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all
               ${activeTab === tab.id 
                 ? 'bg-white text-emerald-600 shadow-sm' 
-                : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50'}
+                : 'text-zinc-400 hover:text-zinc-600'}
             `}
           >
             <tab.icon size={18} />

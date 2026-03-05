@@ -124,7 +124,12 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header 
-          tenantName={currentTenantName} 
+          activeTab={activeTab}
+          user={user}
+          selectedTenant={selectedTenant}
+          tenants={tenants}
+          onSelectTenant={setSelectedTenant}
+          onLogout={handleLogout}
           onQuickLaunch={() => setShowQuickLaunch(true)} 
         />
 

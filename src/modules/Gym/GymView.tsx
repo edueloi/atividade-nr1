@@ -87,26 +87,22 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
     <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900">Aula + Presença</h1>
-          <p className="text-zinc-500">Gestão de Ginástica Laboral e participação.</p>
-        </div>
-        <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-zinc-200 shadow-sm">
+        <div className="flex items-center gap-1 bg-zinc-100/50 p-1 rounded-2xl border border-zinc-200/50">
           <button 
             onClick={() => setActiveSubTab('today')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'today' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-50'}`}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'today' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
           >
             Hoje
           </button>
           <button 
             onClick={() => setActiveSubTab('calendar')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'calendar' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-50'}`}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'calendar' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
           >
             Calendário
           </button>
           <button 
             onClick={() => setActiveSubTab('reports')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'reports' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-50'}`}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'reports' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
           >
             Relatórios
           </button>
