@@ -21,7 +21,7 @@ import { ExternalForm } from './modules/NR1/ExternalForm.js';
 import { ErgoEngView } from './modules/Ergo/ErgoEngView.js';
 import { AdmissionalView } from './modules/Admissional/AdmissionalView.js';
 import { AbsenteeismView } from './modules/Absenteeism/AbsenteeismView.js';
-import { EvidenceGalleryView } from './modules/Evidence/EvidenceGallery.js';
+import { EvidenceView } from './modules/Evidence/EvidenceView.js';
 import ActionPlansView from './modules/ActionPlans/ActionPlansView.js';
 import { CampaignsView } from './modules/Campaigns/Campaigns.js';
 import { ClosingView } from './modules/Gestao/ClosingView.js';
@@ -171,7 +171,7 @@ export default function App() {
               />
             )}
             {activeTab === 'action_plans' && <ActionPlansView key="action_plans" />}
-            {activeTab === 'evidence' && <EvidenceGalleryView key="evidence" />}
+            {activeTab === 'evidence' && <EvidenceView key="evidence" />}
             {activeTab === 'campaigns' && <CampaignsView key="campaigns" />}
             {activeTab === 'closing' && <ClosingView key="closing" />}
             {activeTab === 'reports' && <ReportsView key="reports" />}
