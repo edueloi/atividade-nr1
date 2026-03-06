@@ -22,7 +22,7 @@ import { ErgoEngView } from './modules/Ergo/ErgoEngView.js';
 import { AdmissionalView } from './modules/Admissional/AdmissionalView.js';
 import { AbsenteeismView } from './modules/Absenteeism/AbsenteeismView.js';
 import { EvidenceGalleryView } from './modules/Evidence/EvidenceGallery.js';
-import { ActionPlansView } from './modules/ActionPlans/ActionPlans.js';
+import ActionPlansView from './modules/ActionPlans/ActionPlansView.js';
 import { CampaignsView } from './modules/Campaigns/Campaigns.js';
 import { ClosingView } from './modules/Gestao/ClosingView.js';
 import { ReportsView } from './modules/Gestao/ReportsView.js';
