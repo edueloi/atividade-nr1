@@ -248,3 +248,119 @@ export async function fetchAdmissionSummary(tenantId: string) {
   const response = await fetch(`/api/reports/admission/summary?tenantId=${tenantId}`);
   return response.json();
 }
+
+// --- Fechamento (Closing) ---
+export async function fetchClosingMonths(tenantId: string) {
+  const response = await fetch(`/api/closing/months?tenantId=${tenantId}`);
+  return response.json();
+}
+
+export async function fetchClosingSummary(monthId: string) {
+  const response = await fetch(`/api/closing/summary/${monthId}`);
+  return response.json();
+}
+
+export async function fetchClosingIssues(monthId: string) {
+  const response = await fetch(`/api/closing/issues/${monthId}`);
+  return response.json();
+}
+
+export async function startClosingReview(monthId: string) {
+  const response = await fetch(`/api/closing/start-review/${monthId}`, { method: 'POST' });
+  return response.json();
+}
+
+export async function closeMonthStatus(monthId: string, userId: string) {
+  const response = await fetch(`/api/closing/close/${monthId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  });
+  return response.json();
+}
+
+export async function reopenMonth(monthId: string, data: { reason: string, modules: string[], userId: string }) {
+  const response = await fetch(`/api/closing/reopen/${monthId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return response.json();
+}
+
+export async function fetchClosingRules(tenantId: string) {
+  const response = await fetch(`/api/closing/rules?tenantId=${tenantId}`);
+  return response.json();
+}
+
+export async function updateClosingRule(id: string, data: any) {
+  const response = await fetch(`/api/closing/rules/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return response.json();
+}
+
+// --- Central de Relatórios ---
+export async function generateReport(data: any) {
+  const response = await fetch('/api/reports/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return response.json();
+}
+
+export async function fetchReportHistory(tenantId: string) {
+  const response = await fetch(`/api/reports/history?tenantId=${tenantId}`);
+  return response.json();
+}
+
+export async function deleteReport(id: string) {
+  const response = await fetch(`/api/reports/${id}`, { method: 'DELETE' });
+  return response.json();
+}
+
+export async function retryReport(id: string) {
+  const response = await fetch(`/api/reports/${id}/retry`, { method: 'POST' });
+  return response.json();
+}
+
+export async function fetchReportTemplates(tenantId: string) {
+  const response = await fetch(`/api/reports/templates?tenantId=${tenantId}`);
+  return response.json();
+}
+
+export async function saveReportTemplate(data: any) {
+  const response = await fetch('/api/reports/templates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return response.json();
+}
+
+export async function deleteReportTemplate(id: string) {
+  const response = await fetch(`/api/reports/templates/${id}`, { method: 'DELETE' });
+  return response.json();
+}
+
+export async function createReportShare(data: any) {
+  const response = await fetch('/api/reports/share', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return response.json();
+}
+
+export async function fetchReportShares(tenantId: string) {
+  const response = await fetch(`/api/reports/shares?tenantId=${tenantId}`);
+  return response.json();
+}
+
+export async function revokeReportShare(id: string) {
+  const response = await fetch(`/api/reports/shares/${id}/revoke`, { method: 'POST' });
+  return response.json();
+}

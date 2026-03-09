@@ -346,9 +346,77 @@ router.get("/pending/monthly", (req, res) => {
   ]);
 });
 
-router.post("/closing/month/close", (req, res) => {
-  const { tenantId, month, year, userId } = req.body;
-  // In a real app, we'd update a 'month_closings' table
+// --- Fechamento (Closing) ---
+router.get("/closing/months", (req, res) => {
+  const { tenantId } = req.query;
+  const closings = db.prepare("SELECT * FROM month_closings WHERE tenant_id = ? ORDER BY year DESC, month DESC").all(tenantId);
+  res.json(closings);
+});
+
+router.get("/closing/summary/:id", (req, res) => {
+  const closing = db.prepare("SELECT * FROM month_closings WHERE id = ?").get(req.params.id) as any;
+  if (!closing) return res.status(404).json({ error: "Closing not found" });
+  
+  // Mocking summary data for the month with the correct structure
+  res.json({
+    totalIssues: 12,
+    criticalIssues: 3,
+    importantIssues: 5,
+    modulesOk: 4,
+    reportsGenerated: 2,
+    evidencesCount: 45,
+    progressByModule: [
+      { module: 'Aula + Presença', total: 20, done: 18, status: 'PENDING' },
+      { module: 'Queixas', total: 10, done: 10, status: 'OK' },
+      { module: 'Fisioterapia', total: 15, done: 14, status: 'PENDING' },
+      { module: 'Absenteísmo', total: 30, done: 25, status: 'CRITICAL' },
+      { module: 'Ergonomia', total: 5, done: 5, status: 'OK' },
+      { module: 'NR1', total: 8, done: 7, status: 'CRITICAL' },
+      { module: 'Campanhas', total: 1, done: 1, status: 'OK' },
+      { module: 'Plano de Ação', total: 12, done: 10, status: 'PENDING' },
+      { module: 'Evidências', total: 45, done: 45, status: 'OK' }
+    ],
+    status: closing.status
+  });
+});
+
+router.get("/closing/issues/:id", (req, res) => {
+  // Mocking issues
+  res.json([
+    { id: 'iss-1', module: 'GYM', severity: 'HIGH', description: '2 aulas sem presença registrada na Unidade Sorocaba', status: 'OPEN' },
+    { id: 'iss-2', module: 'ABSENTEEISM', severity: 'MEDIUM', description: '1 atestado pendente de confirmação', status: 'OPEN' },
+  ]);
+});
+
+router.post("/closing/start-review/:id", (req, res) => {
+  db.prepare("UPDATE month_closings SET status = 'REVIEW' WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+router.post("/closing/close/:id", (req, res) => {
+  const { userId } = req.body;
+  const now = new Date().toISOString();
+  db.prepare("UPDATE month_closings SET status = 'CLOSED', closed_at = ?, closed_by = ? WHERE id = ?")
+    .run(now, userId, req.params.id);
+  res.json({ success: true });
+});
+
+router.post("/closing/reopen/:id", (req, res) => {
+  const { reason, modules, userId } = req.body;
+  db.prepare("UPDATE month_closings SET status = 'OPEN' WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+router.get("/closing/rules", (req, res) => {
+  const { tenantId } = req.query;
+  const rules = db.prepare("SELECT * FROM closing_rules WHERE tenant_id = ?").all(tenantId);
+  res.json(rules.map((r: any) => ({ ...r, is_mandatory: !!r.is_mandatory, is_active: !!r.is_active })));
+});
+
+router.patch("/closing/rules/:id", (req, res) => {
+  const { is_mandatory, is_active } = req.body;
+  db.prepare("UPDATE closing_rules SET is_mandatory = ?, is_active = ? WHERE id = ?")
+    .run(is_mandatory ? 1 : 0, is_active ? 1 : 0, req.params.id);
   res.json({ success: true });
 });
 
@@ -784,33 +852,104 @@ router.get("/nr1/responses", (req, res) => {
   })));
 });
 
-// Reports
-router.post("/reports/nr1/pdf", (req, res) => {
-  const { tenantId, type, params } = req.body;
+// --- Central de Relatórios ---
+router.post("/reports/generate", (req, res) => {
+  const { tenantId, name, type, format, params, created_by } = req.body;
   const id = `job-${Date.now()}`;
+  
   db.prepare(`
     INSERT INTO report_jobs (id, tenant_id, type, params_json, status)
-    VALUES (?, ?, ?, ?, 'PENDING')
+    VALUES (?, ?, ?, ?, 'PROCESSING')
   `).run(id, tenantId, type, JSON.stringify(params));
   
-  // Simulate processing
+  // Simulate background processing
   setTimeout(() => {
     db.prepare("UPDATE report_jobs SET status = 'COMPLETED', file_url = ? WHERE id = ?")
-      .run(`/uploads/reports/nr1_${id}.pdf`, id);
-  }, 2000);
+      .run(`#`, id);
+  }, 5000);
   
-  res.json({ jobId: id });
+  res.json({ success: true, id });
 });
 
-router.get("/reports/jobs/:jobId", (req, res) => {
-  const job = db.prepare("SELECT * FROM report_jobs WHERE id = ?").get(req.params.jobId);
-  res.json(job);
-});
-
-router.get("/reports/nr1/history", (req, res) => {
+router.get("/reports/history", (req, res) => {
   const { tenantId } = req.query;
   const history = db.prepare("SELECT * FROM report_jobs WHERE tenant_id = ? ORDER BY created_at DESC").all(tenantId);
-  res.json(history);
+  res.json(history.map((h: any) => ({ ...h, params: JSON.parse(h.params_json || '{}') })));
+});
+
+router.delete("/reports/:id", (req, res) => {
+  db.prepare("DELETE FROM report_jobs WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+router.post("/reports/:id/retry", (req, res) => {
+  const job = db.prepare("SELECT * FROM report_jobs WHERE id = ?").get(req.params.id) as any;
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  
+  const newId = `job-${Date.now()}`;
+  db.prepare(`
+    INSERT INTO report_jobs (id, tenant_id, type, params_json, status)
+    VALUES (?, ?, ?, ?, 'PROCESSING')
+  `).run(newId, job.tenant_id, job.type, job.params_json);
+  
+  setTimeout(() => {
+    db.prepare("UPDATE report_jobs SET status = 'COMPLETED', file_url = ? WHERE id = ?")
+      .run(`#`, newId);
+  }, 5000);
+  
+  res.json({ success: true, id: newId });
+});
+
+router.get("/reports/templates", (req, res) => {
+  const { tenantId } = req.query;
+  const templates = db.prepare("SELECT * FROM report_templates WHERE tenant_id = ?").all(tenantId);
+  res.json(templates.map((t: any) => ({ ...t, params: JSON.parse(t.params_json), isDefault: !!t.is_default })));
+});
+
+router.post("/reports/templates", (req, res) => {
+  const { id, tenant_id, name, type, params, is_default, created_by } = req.body;
+  db.prepare(`
+    INSERT INTO report_templates (id, tenant_id, name, type, params_json, is_default, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, tenant_id, name, type, JSON.stringify(params), is_default ? 1 : 0, created_by);
+  res.json({ success: true });
+});
+
+router.delete("/reports/templates/:id", (req, res) => {
+  db.prepare("DELETE FROM report_templates WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+router.post("/reports/share", (req, res) => {
+  const { report_id, report_name, expires_at, has_password, password } = req.body;
+  const id = `share-${Date.now()}`;
+  const token = Math.random().toString(36).substring(2, 15);
+  
+  db.prepare(`
+    INSERT INTO report_shares (id, report_id, report_name, token, expires_at, has_password, password)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, report_id, report_name, token, expires_at, has_password ? 1 : 0, password);
+  
+  res.json({ success: true, token });
+});
+
+router.get("/reports/shares", (req, res) => {
+  const { tenantId } = req.query;
+  // This is a bit complex because report_shares doesn't have tenant_id directly
+  // We join with report_jobs
+  const shares = db.prepare(`
+    SELECT s.* 
+    FROM report_shares s
+    JOIN report_jobs j ON s.report_id = j.id
+    WHERE j.tenant_id = ?
+    ORDER BY s.created_at DESC
+  `).all(tenantId);
+  res.json(shares.map((s: any) => ({ ...s, has_password: !!s.has_password })));
+});
+
+router.post("/reports/shares/:id/revoke", (req, res) => {
+  db.prepare("UPDATE report_shares SET status = 'REVOKED' WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
 });
 
 // --- Admissional (Cinesiofuncional) ---

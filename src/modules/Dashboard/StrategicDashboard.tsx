@@ -231,7 +231,7 @@ export const StrategicDashboardView: React.FC<StrategicDashboardProps> = ({ tena
             </div>
           </div>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <AreaChart data={data.historical.baseline_vs_current}>
                 <defs>
                   <linearGradient id="colorBaseline" x1="0" y1="0" x2="0" y2="1">
@@ -259,7 +259,7 @@ export const StrategicDashboardView: React.FC<StrategicDashboardProps> = ({ tena
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-900 mb-6">Tendência 5 Anos</h3>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <ComposedChart data={data.historical.trends_5_years}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
@@ -324,7 +324,7 @@ export const StrategicDashboardView: React.FC<StrategicDashboardProps> = ({ tena
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-900 mb-6">Estrutura Corporal (YoY)</h3>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={data.body_structure_yoy} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                 <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
@@ -344,7 +344,7 @@ export const StrategicDashboardView: React.FC<StrategicDashboardProps> = ({ tena
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-900 mb-6">Funil de Saúde Anual</h3>
           <div className="h-[300px] flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie
                   data={data.health_funnel}
@@ -375,7 +375,7 @@ export const StrategicDashboardView: React.FC<StrategicDashboardProps> = ({ tena
             <button className="text-xs font-medium text-emerald-600 hover:underline">Ver lista de atestados</button>
           </div>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={data.absenteeism_cid}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
@@ -589,7 +589,7 @@ export const StrategicDashboardView: React.FC<StrategicDashboardProps> = ({ tena
                   <div className="bg-white p-6 rounded-2xl border border-slate-100">
                     <h3 className="text-sm font-bold text-slate-900 mb-4">Distribuição por Unidade</h3>
                     <div className="h-[200px]">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                         <BarChart data={[
                           { name: 'Matriz', value: 88 },
                           { name: 'Filial Sul', value: 76 },

@@ -118,6 +118,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         userRole={user.role}
+        selectedTenant={selectedTenant}
         onLogout={handleLogout}
         onBackToAdmin={user.role === 'admin_atividade' && selectedTenant ? handleBackToAdmin : undefined}
       />
@@ -173,8 +174,20 @@ export default function App() {
             {activeTab === 'action_plans' && <ActionPlansView key="action_plans" />}
             {activeTab === 'evidence' && <EvidenceView key="evidence" />}
             {activeTab === 'campaigns' && <CampaignsView key="campaigns" />}
-            {activeTab === 'closing' && <ClosingView key="closing" />}
-            {activeTab === 'reports' && <ReportsView key="reports" />}
+            {activeTab === 'closing' && selectedTenant && (
+              <ClosingView 
+                key="closing" 
+                tenant={selectedTenant} 
+                user={user} 
+              />
+            )}
+            {activeTab === 'reports' && selectedTenant && (
+              <ReportsView 
+                key="reports" 
+                tenant={selectedTenant} 
+                user={user} 
+              />
+            )}
             {activeTab === 'admin' && (
               <AdminView 
                 key="admin" 

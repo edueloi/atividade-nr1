@@ -209,47 +209,49 @@ export function Header({
         </div>
 
         {/* Create Hub */}
-        <div className="relative">
-          <button 
-            onClick={() => setShowCreateMenu(!showCreateMenu)}
-            className="flex items-center justify-center w-10 h-10 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 active:scale-95"
-          >
-            <Plus size={20} />
-          </button>
+        {selectedTenant && (
+          <div className="relative">
+            <button 
+              onClick={() => setShowCreateMenu(!showCreateMenu)}
+              className="flex items-center justify-center w-10 h-10 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 active:scale-95"
+            >
+              <Plus size={20} />
+            </button>
 
-          <AnimatePresence>
-            {showCreateMenu && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowCreateMenu(false)} />
-                <motion.div 
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute right-0 top-full mt-2 w-64 bg-white rounded-3xl shadow-2xl border border-zinc-100 p-2 z-20"
-                >
-                  <p className="px-3 py-2 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Lançamento Rápido</p>
-                  <div className="space-y-1">
-                    {createActions.map(action => (
-                      <button
-                        key={action.id}
-                        onClick={() => {
-                          onQuickLaunch();
-                          setShowCreateMenu(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-all group"
-                      >
-                        <div className={`p-2 rounded-xl transition-colors ${action.color}`}>
-                          {action.icon}
-                        </div>
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
+            <AnimatePresence>
+              {showCreateMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowCreateMenu(false)} />
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 top-full mt-2 w-64 bg-white rounded-3xl shadow-2xl border border-zinc-100 p-2 z-20"
+                  >
+                    <p className="px-3 py-2 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Lançamento Rápido</p>
+                    <div className="space-y-1">
+                      {createActions.map(action => (
+                        <button
+                          key={action.id}
+                          onClick={() => {
+                            onQuickLaunch();
+                            setShowCreateMenu(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-all group"
+                        >
+                          <div className={`p-2 rounded-xl transition-colors ${action.color}`}>
+                            {action.icon}
+                          </div>
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         <div className="h-6 w-px bg-zinc-200 mx-1" />
 

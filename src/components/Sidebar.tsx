@@ -16,11 +16,14 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   userRole: string;
+  selectedTenant: any | null;
   onLogout: () => void;
   onBackToAdmin?: () => void;
 }
 
-export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, userRole, onLogout, onBackToAdmin }: SidebarProps) {
+export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, userRole, selectedTenant, onLogout, onBackToAdmin }: SidebarProps) {
+  const isGlobalPanel = userRole === 'admin_atividade' && !selectedTenant;
+
   return (
     <motion.aside 
       initial={false}
@@ -78,124 +81,130 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
         </div>
 
         {/* DASHBOARDS */}
-        <div>
-          {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Dashboards</p>}
-          <NavItem 
-            icon={<LayoutDashboard size={20} />} 
-            label="Dash Mensal" 
-            active={activeTab === 'dashboard'} 
-            onClick={() => setActiveTab('dashboard')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<Target size={20} />} 
-            label="Dash Estratégico" 
-            active={activeTab === 'strategic'} 
-            onClick={() => setActiveTab('strategic')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<Rocket size={20} />} 
-            label="Dash Implantação" 
-            active={activeTab === 'implementation'} 
-            onClick={() => setActiveTab('implementation')} 
-            collapsed={collapsed}
-          />
-        </div>
+        {!isGlobalPanel && (
+          <div>
+            {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Dashboards</p>}
+            <NavItem 
+              icon={<LayoutDashboard size={20} />} 
+              label="Dash Mensal" 
+              active={activeTab === 'dashboard'} 
+              onClick={() => setActiveTab('dashboard')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<Target size={20} />} 
+              label="Dash Estratégico" 
+              active={activeTab === 'strategic'} 
+              onClick={() => setActiveTab('strategic')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<Rocket size={20} />} 
+              label="Dash Implantação" 
+              active={activeTab === 'implementation'} 
+              onClick={() => setActiveTab('implementation')} 
+              collapsed={collapsed}
+            />
+          </div>
+        )}
 
         {/* LANÇAMENTOS */}
-        <div>
-          {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Lançamentos</p>}
-          <NavItem 
-            icon={<ClipboardCheck size={20} />} 
-            label="Aula + Presença" 
-            active={activeTab === 'gym'} 
-            onClick={() => setActiveTab('gym')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<Stethoscope size={20} />} 
-            label="Fisioterapia" 
-            active={activeTab === 'physio'} 
-            onClick={() => setActiveTab('physio')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<Activity size={20} />} 
-            label="Queixas" 
-            active={activeTab === 'complaints'} 
-            onClick={() => setActiveTab('complaints')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<Clock size={20} />} 
-            label="Absenteísmo" 
-            active={activeTab === 'absenteeism'} 
-            onClick={() => setActiveTab('absenteeism')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<BrainCircuit size={20} />} 
-            label="NR1 Psicossocial" 
-            active={activeTab === 'nr1'} 
-            onClick={() => setActiveTab('nr1')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<HardHat size={20} />} 
-            label="Ergonomia / Eng" 
-            active={activeTab === 'ergo'} 
-            onClick={() => setActiveTab('ergo')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<UserCheck size={20} />} 
-            label="Admissional" 
-            active={activeTab === 'admissional'} 
-            onClick={() => setActiveTab('admissional')} 
-            collapsed={collapsed}
-          />
-        </div>
+        {!isGlobalPanel && (
+          <div>
+            {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Lançamentos</p>}
+            <NavItem 
+              icon={<ClipboardCheck size={20} />} 
+              label="Aula + Presença" 
+              active={activeTab === 'gym'} 
+              onClick={() => setActiveTab('gym')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<Stethoscope size={20} />} 
+              label="Fisioterapia" 
+              active={activeTab === 'physio'} 
+              onClick={() => setActiveTab('physio')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<Activity size={20} />} 
+              label="Queixas" 
+              active={activeTab === 'complaints'} 
+              onClick={() => setActiveTab('complaints')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<Clock size={20} />} 
+              label="Absenteísmo" 
+              active={activeTab === 'absenteeism'} 
+              onClick={() => setActiveTab('absenteeism')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<BrainCircuit size={20} />} 
+              label="NR1 Psicossocial" 
+              active={activeTab === 'nr1'} 
+              onClick={() => setActiveTab('nr1')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<HardHat size={20} />} 
+              label="Ergonomia / Eng" 
+              active={activeTab === 'ergo'} 
+              onClick={() => setActiveTab('ergo')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<UserCheck size={20} />} 
+              label="Admissional" 
+              active={activeTab === 'admissional'} 
+              onClick={() => setActiveTab('admissional')} 
+              collapsed={collapsed}
+            />
+          </div>
+        )}
 
         {/* GESTÃO */}
-        <div>
-          {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Gestão</p>}
-          <NavItem 
-            icon={<Briefcase size={20} />} 
-            label="Plano de Ação" 
-            active={activeTab === 'action_plans'} 
-            onClick={() => setActiveTab('action_plans')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<FileImage size={20} />} 
-            label="Evidências" 
-            active={activeTab === 'evidence'} 
-            onClick={() => setActiveTab('evidence')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<Megaphone size={20} />} 
-            label="Campanhas" 
-            active={activeTab === 'campaigns'} 
-            onClick={() => setActiveTab('campaigns')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<FileCheck size={20} />} 
-            label="Fechamento" 
-            active={activeTab === 'closing'} 
-            onClick={() => setActiveTab('closing')} 
-            collapsed={collapsed}
-          />
-          <NavItem 
-            icon={<FileDown size={20} />} 
-            label="Relatórios" 
-            active={activeTab === 'reports'} 
-            onClick={() => setActiveTab('reports')} 
-            collapsed={collapsed}
-          />
-        </div>
+        {!isGlobalPanel && (
+          <div>
+            {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Gestão</p>}
+            <NavItem 
+              icon={<Briefcase size={20} />} 
+              label="Plano de Ação" 
+              active={activeTab === 'action_plans'} 
+              onClick={() => setActiveTab('action_plans')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<FileImage size={20} />} 
+              label="Evidências" 
+              active={activeTab === 'evidence'} 
+              onClick={() => setActiveTab('evidence')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<Megaphone size={20} />} 
+              label="Campanhas" 
+              active={activeTab === 'campaigns'} 
+              onClick={() => setActiveTab('campaigns')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<FileCheck size={20} />} 
+              label="Fechamento" 
+              active={activeTab === 'closing'} 
+              onClick={() => setActiveTab('closing')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<FileDown size={20} />} 
+              label="Relatórios" 
+              active={activeTab === 'reports'} 
+              onClick={() => setActiveTab('reports')} 
+              collapsed={collapsed}
+            />
+          </div>
+        )}
 
         {/* ADMIN */}
         {userRole === 'admin_atividade' && (

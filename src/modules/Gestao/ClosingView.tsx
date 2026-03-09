@@ -1,111 +1,228 @@
-import React from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
-  FileCheck, AlertTriangle, CheckCircle2, 
-  Clock, Download, Filter, Search, 
-  ChevronDown, LayoutDashboard, History, Map, Info, MoreVertical,
-  Settings, Lock, Unlock, FileArchive, Users, Activity
-} from 'lucide-react';
+  fetchClosingMonths, 
+  fetchClosingSummary, 
+  fetchClosingIssues, 
+  startClosingReview, 
+  closeMonthStatus as apiCloseMonth, 
+  reopenMonth as apiReopenMonth,
+  fetchClosingRules,
+  updateClosingRule
+} from '../../services/api';
+import { ClosingOverview } from './ClosingOverview';
+import { ClosingIssues } from './ClosingIssues';
+import { ClosingValidations } from './ClosingValidations';
+import { ClosingDelivery } from './ClosingDelivery';
+import { ClosingHistory } from './ClosingHistory';
+import { ClosingMonth, ClosingIssue, ClosingRule, ClosingSummary, ClosingStatus } from './types';
+import { mockClosingMonths, mockClosingIssues, mockClosingRules, mockClosingSummary } from './mockData';
 
-export const ClosingView: React.FC = () => {
-  const units = [
-    { name: 'Unidade Matriz', status: 'Pendente', launches: 85, target: 120, professional: 'Ricardo Prof' },
-    { name: 'Filial Sul', status: 'Concluído', launches: 142, target: 140, professional: 'Ana Silva' },
-    { name: 'Centro Logístico', status: 'Em Revisão', launches: 98, target: 100, professional: 'Carlos Souza' },
-  ];
+interface ClosingViewProps {
+  tenant: { id: string; name: string };
+  user: { id: string; name: string; role: string };
+}
+
+export const ClosingView: React.FC<ClosingViewProps> = ({ tenant, user }) => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'validations' | 'delivery' | 'history'>('overview');
+  const [months, setMonths] = useState<ClosingMonth[]>([]);
+  const [currentMonth, setCurrentMonth] = useState<ClosingMonth | null>(null);
+  const [summary, setSummary] = useState<ClosingSummary | null>(null);
+  const [issues, setIssues] = useState<ClosingIssue[]>([]);
+  const [rules, setRules] = useState<ClosingRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [issueFilter, setIssueFilter] = useState<{ severity: string | null; module: string | null } | null>(null);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [tenant.id]);
+
+  const loadInitialData = async () => {
+    setLoading(true);
+    try {
+      const monthsData = await fetchClosingMonths(tenant.id);
+      const rulesData = await fetchClosingRules(tenant.id);
+      
+      const activeMonths = monthsData?.length ? monthsData : mockClosingMonths;
+      setMonths(activeMonths);
+      setRules(rulesData?.length ? rulesData : mockClosingRules);
+      
+      if (activeMonths.length > 0) {
+        handleSelectMonth(activeMonths[0]);
+      }
+    } catch (error) {
+      console.error('Error loading closing data:', error);
+      setMonths(mockClosingMonths);
+      setRules(mockClosingRules);
+      handleSelectMonth(mockClosingMonths[0]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectMonth = async (month: ClosingMonth) => {
+    setCurrentMonth(month);
+    try {
+      const summaryData = await fetchClosingSummary(month.id);
+      const issuesData = await fetchClosingIssues(month.id);
+      setSummary(summaryData || mockClosingSummary);
+      setIssues(issuesData?.length ? issuesData : mockClosingIssues);
+    } catch (e) {
+      setSummary(mockClosingSummary);
+      setIssues(mockClosingIssues);
+    }
+  };
+
+  const handleStartReview = async () => {
+    if (!currentMonth) return;
+    try {
+      await startClosingReview(currentMonth.id);
+      setCurrentMonth({ ...currentMonth, status: 'REVIEW' });
+    } catch (e) {
+      setCurrentMonth({ ...currentMonth, status: 'REVIEW' });
+    }
+  };
+
+  const handleCloseMonth = async () => {
+    if (!currentMonth) return;
+    if (summary && summary.criticalIssues > 0) {
+      alert('Não é possível fechar o mês com pendências críticas.');
+      return;
+    }
+    try {
+      await apiCloseMonth(currentMonth.id, user.id);
+      setCurrentMonth({ ...currentMonth, status: 'CLOSED', closed_by: user.name, closed_at: new Date().toISOString() });
+    } catch (e) {
+      setCurrentMonth({ ...currentMonth, status: 'CLOSED', closed_by: user.name, closed_at: new Date().toISOString() });
+    }
+  };
+
+  const handleReopenMonth = async (monthId: string, reason: string, modules: string[]) => {
+    try {
+      await apiReopenMonth(monthId, { reason, modules, userId: user.id });
+      const updatedMonths = months.map(m => m.id === monthId ? { ...m, status: 'REOPENED' as ClosingStatus } : m);
+      setMonths(updatedMonths);
+      if (currentMonth?.id === monthId) {
+        setCurrentMonth({ ...currentMonth, status: 'REOPENED' });
+      }
+    } catch (e) {
+      const updatedMonths = months.map(m => m.id === monthId ? { ...m, status: 'REOPENED' as ClosingStatus } : m);
+      setMonths(updatedMonths);
+      if (currentMonth?.id === monthId) {
+        setCurrentMonth({ ...currentMonth, status: 'REOPENED' });
+      }
+    }
+  };
+
+  const handleFilterIssues = (severity: string | null, module: string | null) => {
+    setIssueFilter({ severity, module });
+    setActiveTab('issues');
+  };
+
+  const handleResolveIssue = (id: string) => {
+    setIssues(issues.map(i => i.id === id ? { ...i, status: 'DONE', resolved_by: user.name, resolved_at: new Date().toISOString() } : i));
+  };
+
+  const handleToggleRule = async (id: string) => {
+    const rule = rules.find(r => r.id === id);
+    if (!rule) return;
+    try {
+      await updateClosingRule(id, { is_enabled: !rule.is_enabled });
+      setRules(rules.map(r => r.id === id ? { ...r, is_enabled: !r.is_enabled } : r));
+    } catch (e) {
+      setRules(rules.map(r => r.id === id ? { ...r, is_enabled: !r.is_enabled } : r));
+    }
+  };
+
+  const handleUpdateSeverity = async (id: string, severity: any) => {
+    try {
+      await updateClosingRule(id, { severity });
+      setRules(rules.map(r => r.id === id ? { ...r, severity } : r));
+    } catch (e) {
+      setRules(rules.map(r => r.id === id ? { ...r, severity } : r));
+    }
+  };
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900">Fechamento do Mês</h1>
-          <p className="text-zinc-500">Valide e encerre a competência atual.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button className="px-4 py-2 bg-white border border-zinc-200 text-zinc-600 rounded-xl font-bold text-sm hover:bg-zinc-50 transition-colors flex items-center gap-2">
-            <Download className="w-4 h-4" />
-            Pacote do Mês
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-1 p-1 bg-zinc-100/50 rounded-2xl w-fit border border-zinc-200/50">
+        {[
+          { id: 'overview', label: 'Visão Geral' },
+          { id: 'issues', label: 'Pendências' },
+          { id: 'validations', label: 'Validações' },
+          { id: 'delivery', label: 'Entrega' },
+          { id: 'history', label: 'Histórico' }
+        ].map((tab) => (
+          <button 
+            key={tab.id}
+            onClick={() => {
+              setActiveTab(tab.id as any);
+              if (tab.id !== 'issues') setIssueFilter(null);
+            }}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
+          >
+            {tab.label}
           </button>
-          <button className="px-4 py-2 bg-rose-600 text-white rounded-xl font-bold text-sm hover:bg-rose-700 transition-colors flex items-center gap-2">
-            <Lock className="w-4 h-4" />
-            Fechar Competência
-          </button>
-        </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-zinc-900">Status por Unidade</h2>
-              <span className="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg">Prazo: Dia 10</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-50 text-zinc-500 font-bold uppercase text-[10px]">
-                  <tr>
-                    <th className="px-6 py-3">Unidade / Profissional</th>
-                    <th className="px-6 py-3">Lançamentos</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3">Ação</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {units.map((unit, i) => (
-                    <tr key={i} className="hover:bg-zinc-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-zinc-900">{unit.name}</div>
-                        <div className="text-xs text-zinc-500">{unit.professional}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden max-w-[100px]">
-                            <div className={`h-full ${unit.launches >= unit.target ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, (unit.launches / unit.target) * 100)}%` }} />
-                          </div>
-                          <span className="text-xs font-bold text-zinc-600">{unit.launches}/{unit.target}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
-                          unit.status === 'Concluído' ? 'bg-emerald-50 text-emerald-600' : 
-                          unit.status === 'Em Revisão' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
-                        }`}>
-                          {unit.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button className="text-emerald-600 font-bold hover:underline">Cobrar</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+      {/* Content */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {activeTab === 'overview' && summary && currentMonth && (
+            <ClosingOverview 
+              summary={summary}
+              status={currentMonth.status}
+              onStartReview={handleStartReview}
+              onCloseMonth={handleCloseMonth}
+              onGeneratePackage={() => setActiveTab('delivery')}
+              onReopen={() => setActiveTab('history')}
+              onFilterIssues={handleFilterIssues}
+            />
+          )}
 
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm">
-            <h2 className="text-lg font-bold text-zinc-900 mb-6">Resumo de Pendências</h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-amber-50 rounded-xl border border-amber-100">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
-                  <span className="text-sm font-bold text-amber-900">12 Aulas s/ Presença</span>
-                </div>
-                <button className="text-xs font-bold text-amber-700 hover:underline">Ver</button>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-rose-50 rounded-xl border border-rose-100">
-                <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-rose-600" />
-                  <span className="text-sm font-bold text-rose-900">5 Queixas s/ Evolução</span>
-                </div>
-                <button className="text-xs font-bold text-rose-700 hover:underline">Ver</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+          {activeTab === 'issues' && (
+            <ClosingIssues 
+              issues={issues}
+              onResolve={(id) => {
+                handleResolveIssue(id);
+                alert('Pendência marcada como resolvida!');
+              }}
+              onNavigate={(issue) => alert(`Navegando para o registro ${issue.ref_id} no módulo ${issue.module}...`)}
+              initialFilter={issueFilter || undefined}
+            />
+          )}
+
+          {activeTab === 'validations' && (
+            <ClosingValidations 
+              rules={rules}
+              onToggleRule={handleToggleRule}
+              onUpdateSeverity={handleUpdateSeverity}
+            />
+          )}
+
+          {activeTab === 'delivery' && (
+            <ClosingDelivery 
+              onGenerate={(type) => console.log('Generate', type)}
+              onSendToClient={(id) => console.log('Send', id)}
+            />
+          )}
+
+          {activeTab === 'history' && (
+            <ClosingHistory 
+              history={months}
+              onReopen={handleReopenMonth}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };

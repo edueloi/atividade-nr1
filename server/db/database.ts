@@ -330,6 +330,32 @@ export function initDb() {
       FOREIGN KEY(tenant_id) REFERENCES tenants(id)
     );
 
+    CREATE TABLE IF NOT EXISTS report_templates (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      params_json TEXT NOT NULL,
+      is_default BOOLEAN DEFAULT 0,
+      created_by TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS report_shares (
+      id TEXT PRIMARY KEY,
+      report_id TEXT NOT NULL,
+      report_name TEXT NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TEXT NOT NULL,
+      has_password BOOLEAN DEFAULT 0,
+      password TEXT,
+      views_count INTEGER DEFAULT 0,
+      status TEXT CHECK(status IN ('ACTIVE', 'REVOKED', 'EXPIRED')) DEFAULT 'ACTIVE',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(report_id) REFERENCES report_jobs(id)
+    );
+
     -- Action Plans & Evidence
     CREATE TABLE IF NOT EXISTS action_plans (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -401,6 +427,42 @@ export function initDb() {
       FOREIGN KEY(unit_id) REFERENCES units(id),
       FOREIGN KEY(sector_id) REFERENCES sectors(id),
       FOREIGN KEY(template_id) REFERENCES admission_templates(id)
+    );
+
+    -- Fechamento (Closing)
+    CREATE TABLE IF NOT EXISTS month_closings (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      month INTEGER NOT NULL,
+      year INTEGER NOT NULL,
+      status TEXT CHECK(status IN ('OPEN', 'REVIEW', 'CLOSED')) DEFAULT 'OPEN',
+      closed_at DATETIME,
+      closed_by TEXT,
+      summary_json TEXT, -- Cached summary data
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id),
+      FOREIGN KEY(closed_by) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS closing_rules (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      module TEXT NOT NULL,
+      rule_name TEXT NOT NULL,
+      is_mandatory BOOLEAN DEFAULT 1,
+      is_active BOOLEAN DEFAULT 1,
+      FOREIGN KEY(tenant_id) REFERENCES tenants(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS closing_history (
+      id TEXT PRIMARY KEY,
+      closing_id TEXT NOT NULL,
+      action TEXT NOT NULL, -- OPEN, START_REVIEW, CLOSE, REOPEN
+      note TEXT,
+      user_id TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(closing_id) REFERENCES month_closings(id),
+      FOREIGN KEY(user_id) REFERENCES users(id)
     );
   `);
 
@@ -481,6 +543,27 @@ export function initDb() {
       INSERT INTO admission_evaluations (id, tenant_id, unit_id, sector_id, role_name, template_id, evaluation_date, result, reasons_json, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run('eval-2', toyotaId, toyotaUnit, toyotaSector, 'Operador de Empilhadeira', templateId, today, 'NOT_RECOMMENDED', JSON.stringify(['Dor lombar']), 'admin-1');
+
+    // Seed Closing Rules
+    const rules = [
+      { id: 'rule-1', module: 'GYM', name: 'Todas as aulas do mês devem ter presença registrada', mandatory: 1 },
+      { id: 'rule-2', module: 'GYM', name: 'Mínimo de 1 evidência por setor/mês', mandatory: 1 },
+      { id: 'rule-3', module: 'ABSENTEEISM', name: 'Todos os atestados do mês devem estar confirmados', mandatory: 1 },
+      { id: 'rule-4', module: 'ADMISSION', name: 'Avaliações pendentes devem ser finalizadas', mandatory: 0 },
+    ];
+
+    for (const r of rules) {
+      db.prepare(`
+        INSERT INTO closing_rules (id, tenant_id, module, rule_name, is_mandatory)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(r.id, toyotaId, r.module, r.name, r.mandatory);
+    }
+
+    // Seed a month closing
+    db.prepare(`
+      INSERT INTO month_closings (id, tenant_id, month, year, status)
+      VALUES (?, ?, ?, ?, ?)
+    `).run('close-mar-2026', toyotaId, 3, 2026, 'OPEN');
   }
 }
 
