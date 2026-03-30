@@ -1,13 +1,15 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { 
-  LayoutDashboard, ClipboardCheck, Stethoscope, 
-  Activity, BrainCircuit, Clock, FileImage, 
-  Target, Megaphone, Settings, ChevronLeft, 
+import {
+  LayoutDashboard, ClipboardCheck, Stethoscope,
+  BrainCircuit, Clock, FileImage,
+  Target, Megaphone, Settings, ChevronLeft,
   ChevronRight, LogOut, Briefcase, Home,
   Rocket, HardHat, UserCheck, FileCheck,
-  FileDown, ShieldAlert
+  FileDown, ShieldAlert,
+  Activity
 } from 'lucide-react';
+import LogoMenu from '../../images/logo.png';
 import { NavItem } from './NavItem.js';
 
 interface SidebarProps {
@@ -33,16 +35,13 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
       <div className="p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           {!collapsed && (
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200">
-                <Activity className="text-white" size={18} />
-              </div>
-              <span className="font-bold text-lg tracking-tight text-zinc-900">Atividade SST</span>
+            <div className="flex items-center justify-center w-full">
+              <img src={LogoMenu} alt="Logo" className="w-[104px] h-[104px] object-contain" />
             </div>
           )}
           {collapsed && (
-            <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-200">
-              <Activity className="text-white" size={18} />
+            <div className="flex items-center justify-center mx-auto">
+              <img src={LogoMenu} alt="Logo" className="w-20 h-20 object-contain" />
             </div>
           )}
         </div>
