@@ -26,9 +26,32 @@ import {
   FileText,
   Calendar,
   User,
-  Activity
+  Activity,
+  BarChart3,
+  PieChart as PieIcon,
+  Smile,
+  Meh,
+  Frown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  Radar,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line
+} from 'recharts';
 
 interface SectorResponse {
   id: string;
@@ -46,6 +69,7 @@ export function NR1Responses() {
   const [selectedCycle, setSelectedCycle] = useState('1');
   const [selectedSector, setSelectedSector] = useState<SectorResponse | null>(null);
   const [riskFilter, setRiskFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [viewMode, setViewMode] = useState<'sectors' | 'analysis'>('sectors');
   
   // UI States
   const [showActionMenu, setShowActionMenu] = useState<string | null>(null);
@@ -140,7 +164,29 @@ export function NR1Responses() {
         </AnimatePresence>
       </div>
 
-      {/* Filters */}
+      {/* View mode toggle */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setViewMode('sectors')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${
+            viewMode === 'sectors' ? 'bg-zinc-900 text-white' : 'bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900'
+          }`}
+        >
+          <Users size={14} /> Por Setor
+        </button>
+        <button
+          onClick={() => setViewMode('analysis')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${
+            viewMode === 'analysis' ? 'bg-zinc-900 text-white' : 'bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900'
+          }`}
+        >
+          <BarChart3 size={14} /> Análise de Respostas
+        </button>
+      </div>
+
+      {viewMode === 'analysis' && <AnalysisTab />}
+
+      {viewMode === 'sectors' && (<>
       <div className="flex flex-col md:flex-row md:items-center gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm">
         <div className="flex-1 flex items-center gap-4">
           <div className="space-y-1 flex-1 max-w-[300px]">
@@ -741,6 +787,244 @@ export function NR1Responses() {
           </div>
         )}
       </AnimatePresence>
+      </>)}
     </div>
+  );
+}
+
+// ─── Analysis Tab ─────────────────────────────────────────────────────────────
+function AnalysisTab() {
+  const questions = [
+    { id: 'q1', text: 'Nível de estresse no trabalho', block: 'Carga & Ritmo', avg: 6.4, type: 'scale' },
+    { id: 'q2', text: 'Suporte da liderança', block: 'Apoio & Gestão', avg: 5.2, type: 'scale' },
+    { id: 'q3', text: 'Dificuldades para dormir (últimos 30 dias)', block: 'Saúde', avg: null, type: 'yes_no', yes: 58, no: 42 },
+    { id: 'q4', text: 'Segurança para expressar opiniões', block: 'Segurança Psicológica', avg: 5.8, type: 'scale' },
+    { id: 'q5', text: 'Comunicação entre colegas do setor', block: 'Relações', avg: 6.1, type: 'scale' },
+    { id: 'q6', text: 'Bem-estar geral no trabalho', block: 'Bem-estar', avg: 5.5, type: 'scale' },
+  ];
+
+  const scaleDistributions: Record<string, { value: number; count: number }[]> = {
+    q1: [0,0,1,3,5,12,18,25,22,10,4].map((c, i) => ({ value: i, count: c })),
+    q2: [2,4,6,8,10,14,18,20,12,4,2].map((c, i) => ({ value: i, count: c })),
+    q4: [1,2,4,5,8,12,20,24,14,7,3].map((c, i) => ({ value: i, count: c })),
+    q5: [0,1,3,5,7,10,18,24,20,9,3].map((c, i) => ({ value: i, count: c })),
+    q6: [1,2,4,6,10,14,20,22,14,5,2].map((c, i) => ({ value: i, count: c })),
+  };
+
+  const radarData = [
+    { subject: 'Carga', score: 36, fullMark: 100 },
+    { subject: 'Apoio', score: 48, fullMark: 100 },
+    { subject: 'Segurança', score: 42, fullMark: 100 },
+    { subject: 'Relações', score: 61, fullMark: 100 },
+    { subject: 'Bem-estar', score: 45, fullMark: 100 },
+    { subject: 'Saúde', score: 38, fullMark: 100 },
+  ];
+
+  const trendData = [
+    { cycle: 'Jan', score: 52 },
+    { cycle: 'Fev', score: 48 },
+    { cycle: 'Mar', score: 44 },
+  ];
+
+  const pieData = [
+    { name: 'Risco Baixo', value: 28, color: '#10b981' },
+    { name: 'Risco Médio', value: 45, color: '#f59e0b' },
+    { name: 'Risco Alto', value: 27, color: '#ef4444' },
+  ];
+
+  const getAvgColor = (avg: number) =>
+    avg >= 7 ? 'text-emerald-600' : avg >= 5 ? 'text-amber-600' : 'text-red-500';
+
+  const getAvgLabel = (avg: number) =>
+    avg >= 7 ? 'Saudável' : avg >= 5 ? 'Alerta' : 'Crítico';
+
+  const [selectedQ, setSelectedQ] = useState(questions[0].id);
+  const activeQ = questions.find(q => q.id === selectedQ)!;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Respostas Coletadas', value: '128', sub: 'Ciclo Março/2026', color: 'bg-zinc-50' },
+          { label: 'Score Médio Geral', value: '44', sub: 'Risco Médio', color: 'bg-amber-50' },
+          { label: 'Questão mais crítica', value: 'Estresse', sub: 'Média 6.4 / 10', color: 'bg-red-50' },
+          { label: 'Adesão do ciclo', value: '85%', sub: '128 / 150 esperados', color: 'bg-emerald-50' },
+        ].map(s => (
+          <div key={s.label} className={`${s.color} p-5 rounded-2xl border border-zinc-100`}>
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">{s.label}</p>
+            <p className="text-2xl font-black text-zinc-900">{s.value}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Radar chart */}
+        <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm">
+          <h4 className="text-sm font-black text-zinc-900 mb-1">Radar por Bloco</h4>
+          <p className="text-xs text-zinc-400 mb-4">Score de risco médio (0–100)</p>
+          <ResponsiveContainer width="100%" height={200}>
+            <RadarChart data={radarData}>
+              <PolarGrid stroke="#f4f4f5" />
+              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fontWeight: 700, fill: '#71717a' }} />
+              <Radar dataKey="score" stroke="#10b981" fill="#10b981" fillOpacity={0.15} strokeWidth={2} />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Risk distribution pie */}
+        <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm">
+          <h4 className="text-sm font-black text-zinc-900 mb-1">Distribuição de Risco</h4>
+          <p className="text-xs text-zinc-400 mb-4">% de respondentes por nível</p>
+          <div className="flex items-center gap-4">
+            <ResponsiveContainer width="50%" height={140}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" strokeWidth={0}>
+                  {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="space-y-2 flex-1">
+              {pieData.map(p => (
+                <div key={p.name} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                    <span className="text-xs font-bold text-zinc-600">{p.name}</span>
+                  </div>
+                  <span className="text-xs font-black text-zinc-900">{p.value}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Trend line */}
+        <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm">
+          <h4 className="text-sm font-black text-zinc-900 mb-1">Tendência de Score</h4>
+          <p className="text-xs text-zinc-400 mb-4">Últimos 3 ciclos</p>
+          <ResponsiveContainer width="100%" height={140}>
+            <LineChart data={trendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
+              <XAxis dataKey="cycle" tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e4e4e7', fontSize: 12 }} />
+              <Line type="monotone" dataKey="score" stroke="#f59e0b" strokeWidth={3} dot={{ r: 5, fill: '#f59e0b' }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Per-question analysis */}
+      <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
+          <div>
+            <h4 className="font-black text-zinc-900">Análise por Pergunta</h4>
+            <p className="text-xs text-zinc-400 mt-0.5">Selecione uma pergunta para ver a distribuição de respostas.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-zinc-100">
+          {/* Question list */}
+          <div className="p-4 space-y-1">
+            {questions.map(q => (
+              <button
+                key={q.id}
+                onClick={() => setSelectedQ(q.id)}
+                className={`w-full text-left p-4 rounded-2xl transition-all ${
+                  selectedQ === q.id ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-50 text-zinc-700'
+                }`}
+              >
+                <span className={`text-[9px] font-black uppercase tracking-widest block mb-1 ${
+                  selectedQ === q.id ? 'text-zinc-400' : 'text-zinc-400'
+                }`}>{q.block}</span>
+                <p className="text-xs font-bold leading-snug">{q.text}</p>
+                {q.avg !== null && (
+                  <span className={`text-[10px] font-black mt-1.5 block ${
+                    selectedQ === q.id ? 'text-zinc-300' : getAvgColor(q.avg)
+                  }`}>
+                    Média: {q.avg} — {getAvgLabel(q.avg)}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Chart area */}
+          <div className="lg:col-span-2 p-6 space-y-6">
+            <div className="flex items-start justify-between flex-wrap gap-3">
+              <div>
+                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">{activeQ.block}</span>
+                <h5 className="text-lg font-black text-zinc-900 leading-snug mt-0.5">{activeQ.text}</h5>
+              </div>
+              {activeQ.avg !== null && (
+                <div className={`px-4 py-2 rounded-2xl text-sm font-black flex items-center gap-2 ${
+                  activeQ.avg >= 7 ? 'bg-emerald-100 text-emerald-700' :
+                  activeQ.avg >= 5 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {activeQ.avg >= 7 ? <Smile size={16} /> : activeQ.avg >= 5 ? <Meh size={16} /> : <Frown size={16} />}
+                  Média: {activeQ.avg} / 10
+                </div>
+              )}
+            </div>
+
+            {activeQ.type === 'scale' && scaleDistributions[activeQ.id] && (
+              <>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={scaleDistributions[activeQ.id]} barSize={28}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" vertical={false} />
+                    <XAxis dataKey="value" tick={{ fontSize: 12, fontWeight: 700, fill: '#71717a' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#a1a1aa' }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 12, border: '1px solid #e4e4e7', fontSize: 12 }}
+                      formatter={(v: any) => [`${v} respostas`, 'Total']}
+                      labelFormatter={(l) => `Nota ${l}`}
+                    />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                      {scaleDistributions[activeQ.id].map((entry, i) => (
+                        <Cell
+                          key={i}
+                          fill={
+                            i <= 3 ? '#ef4444' :
+                            i <= 5 ? '#f59e0b' :
+                            i <= 7 ? '#84cc16' : '#10b981'
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-red-400 rounded-sm" /> Crítico (0–3)</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-amber-400 rounded-sm" /> Alerta (4–5)</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-lime-400 rounded-sm" /> Bom (6–7)</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm" /> Ótimo (8–10)</span>
+                </div>
+              </>
+            )}
+
+            {activeQ.type === 'yes_no' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-6 bg-red-50 border border-red-100 rounded-2xl text-center">
+                    <p className="text-4xl font-black text-red-600">{activeQ.yes}%</p>
+                    <p className="text-xs font-black text-red-400 uppercase tracking-widest mt-1">Responderam Sim</p>
+                  </div>
+                  <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-2xl text-center">
+                    <p className="text-4xl font-black text-emerald-600">{activeQ.no}%</p>
+                    <p className="text-xs font-black text-emerald-400 uppercase tracking-widest mt-1">Responderam Não</p>
+                  </div>
+                </div>
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                  <p className="text-xs text-amber-800 font-medium">
+                    <strong>Atenção:</strong> {activeQ.yes}% dos colaboradores relataram dificuldades para dormir devido ao trabalho nos últimos 30 dias. Isso é um indicador de estresse crônico que requer acompanhamento.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }

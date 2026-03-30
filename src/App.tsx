@@ -27,9 +27,15 @@ import { CampaignsView } from './modules/Campaigns/Campaigns.js';
 import { ClosingView } from './modules/Gestao/ClosingView.js';
 import { ReportsView } from './modules/Gestao/ReportsView.js';
 import { AdminView } from './modules/Admin/AdminView.js';
+import { AdminCompaniesView } from './modules/Admin/AdminCompaniesView.js';
+import { AdminUsersView } from './modules/Admin/AdminUsersView.js';
+import { AdminFormsView } from './modules/Admin/AdminFormsView.js';
+import { AdminReportsView } from './modules/Admin/AdminReportsView.js';
+import { AdminAuditView } from './modules/Admin/AdminAuditView.js';
+import { fetchTenants } from './services/api.js';
 
 // Types
-type Role = 'admin_atividade' | 'professional' | 'client' | 'auditor';
+type Role = 'admin_atividade' | 'professional' | 'tecnico_sst' | 'client' | 'auditor';
 
 interface Tenant {
   id: string;
@@ -63,12 +69,21 @@ export default function App() {
     }
   }, []);
 
-  // Mock initial data
   useEffect(() => {
-    setTenants([
-      { id: 'toyota-br', name: 'Toyota Brasil' },
-      { id: 'usina-pilon', name: 'Usina Pilon' }
-    ]);
+    const loadTenants = async () => {
+      try {
+        const result = await fetchTenants();
+        setTenants(result);
+      } catch (error) {
+        console.error('Erro ao carregar contratos:', error);
+        setTenants([
+          { id: 'toyota-br', name: 'Toyota Brasil' },
+          { id: 'usina-pilon', name: 'Usina Pilon' }
+        ]);
+      }
+    };
+
+    loadTenants();
   }, []);
 
   const handleLogin = (role: string, tenantId: string | null) => {

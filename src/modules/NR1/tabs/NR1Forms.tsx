@@ -20,7 +20,14 @@ import {
   ShieldCheck,
   ArrowRight,
   ArrowLeft,
-  Check
+  Check,
+  Share2,
+  Link2,
+  Building2,
+  ExternalLink,
+  ClipboardCheck,
+  Users,
+  QrCode
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -89,6 +96,7 @@ export function NR1Forms() {
   ]);
 
   const [editingForm, setEditingForm] = useState<Form | null>(null);
+  const [sharingForm, setSharingForm] = useState<Form | null>(null);
 
   const getStatusColor = (status: Form['status']) => {
     switch (status) {
@@ -106,19 +114,20 @@ export function NR1Forms() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold text-zinc-900">Modelos de Questionário</h3>
-        <button 
-          onClick={() => setEditingForm({ id: 'new', name: 'Novo Formulário', version: 1, status: 'DRAFT', updatedAt: new Date().toISOString().split('T')[0], questionsCount: 0, blocks: [] })}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/10"
-        >
-          <Plus size={18} />
-          Criar Modelo
-        </button>
-      </div>
+    <>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-zinc-900">Modelos de Questionário</h3>
+          <button 
+            onClick={() => setEditingForm({ id: 'new', name: 'Novo Formulário', version: 1, status: 'DRAFT', updatedAt: new Date().toISOString().split('T')[0], questionsCount: 0, blocks: [] })}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/10"
+          >
+            <Plus size={18} />
+            Criar Modelo
+          </button>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {forms.map((form) => (
           <div 
             key={form.id}
@@ -161,14 +170,31 @@ export function NR1Forms() {
               >
                 {form.status === 'PUBLISHED' ? 'Ver/Duplicar' : 'Editar'}
               </button>
-              <button className="flex items-center justify-center gap-2 py-2 border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 transition-colors">
-                Histórico
-              </button>
+              {form.status === 'PUBLISHED' ? (
+                <button
+                  onClick={() => setSharingForm(form)}
+                  className="flex items-center justify-center gap-2 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/10"
+                >
+                  <Share2 size={14} /> Compartilhar
+                </button>
+              ) : (
+                <button className="flex items-center justify-center gap-2 py-2 border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 transition-colors">
+                  Histórico
+                </button>
+              )}
             </div>
           </div>
         ))}
+        </div>
       </div>
-    </div>
+
+      {/* Share Modal */}
+      <AnimatePresence>
+        {sharingForm && (
+          <ShareFormModal form={sharingForm} onClose={() => setSharingForm(null)} />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -620,6 +646,183 @@ function FormBuilder({ form, onBack, onSave }: { form: Form, onBack: () => void,
           </div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Share Form Modal ────────────────────────────────────────────────────────
+const TENANTS = [
+  { id: 'toyota-br', name: 'Toyota Brasil — Sorocaba' },
+  { id: 'yazaki-br', name: 'Yazaki do Brasil' },
+  { id: 'usina-pilon', name: 'Usina Pilon' },
+  { id: 'bosch-camp', name: 'Bosch Campinas' },
+];
+
+function ShareFormModal({ form, onClose }: { form: Form; onClose: () => void }) {
+  const [selectedTenant, setSelectedTenant] = useState(TENANTS[0].id);
+  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'link' | 'history'>('link');
+
+  const token = `tok_${form.id}_${selectedTenant}_2026`;
+  const shareUrl = `${window.location.origin}/nr1/s/${token}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(shareUrl).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const sentHistory = [
+    { tenant: 'Toyota Brasil — Sorocaba', date: '10/03/2026', responses: 124, adhesion: 85 },
+    { tenant: 'Usina Pilon', date: '28/02/2026', responses: 47, adhesion: 72 },
+  ];
+
+  return (
+    <div className="fixed inset-0 bg-zinc-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl overflow-hidden"
+      >
+        {/* Header */}
+        <div className="p-8 pb-0">
+          <div className="flex items-start justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
+                <Share2 size={22} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-zinc-900">Compartilhar Formulário</h3>
+                <p className="text-xs text-zinc-400 font-medium mt-0.5">{form.name} · v{form.version}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-all">
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1 border-b border-zinc-100">
+            {[
+              { id: 'link', label: 'Gerar Link' },
+              { id: 'history', label: 'Histórico de Envios' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-4 py-3 text-xs font-black uppercase tracking-widest transition-all relative ${
+                  activeTab === tab.id ? 'text-zinc-900' : 'text-zinc-400 hover:text-zinc-600'
+                }`}
+              >
+                {tab.label}
+                {activeTab === tab.id && (
+                  <motion.div layoutId="share-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-8 space-y-6">
+          {activeTab === 'link' && (
+            <>
+              {/* Company selector */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Building2 size={12} /> Empresa / Contratante
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  {TENANTS.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setSelectedTenant(t.id)}
+                      className={`px-4 py-3 rounded-2xl border-2 text-left text-sm font-bold transition-all flex items-center justify-between ${
+                        selectedTenant === t.id
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                          : 'border-zinc-100 bg-zinc-50 text-zinc-600 hover:border-zinc-200'
+                      }`}
+                    >
+                      {t.name}
+                      {selectedTenant === t.id && <CheckCircle2 size={16} className="text-emerald-500" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Link field */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Link2 size={12} /> Link de Acesso (sem login)
+                </label>
+                <div className="flex gap-2">
+                  <div className="flex-1 px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-xs font-mono text-zinc-500 truncate select-all">
+                    {shareUrl}
+                  </div>
+                  <button
+                    onClick={handleCopy}
+                    className={`px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2 flex-shrink-0 ${
+                      copied
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-zinc-900 text-white hover:bg-zinc-800'
+                    }`}
+                  >
+                    {copied ? <><ClipboardCheck size={14} /> Copiado!</> : <><Link2 size={14} /> Copiar</>}
+                  </button>
+                </div>
+              </div>
+
+              {/* Info box */}
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                <ShieldCheck size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  O link não exige login. Qualquer colaborador da <strong>{TENANTS.find(t => t.id === selectedTenant)?.name}</strong> que receber este link poderá responder.
+                  O nome da empresa aparece na página do formulário.
+                </p>
+              </div>
+
+              {/* Preview button */}
+              <a
+                href={shareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-4 border-2 border-zinc-200 text-zinc-700 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-zinc-50 transition-all flex items-center justify-center gap-2"
+              >
+                <ExternalLink size={14} /> Visualizar como Respondente
+              </a>
+            </>
+          )}
+
+          {activeTab === 'history' && (
+            <div className="space-y-3">
+              {sentHistory.length === 0 ? (
+                <div className="py-12 text-center text-zinc-400">
+                  <Share2 size={32} className="mx-auto mb-3 opacity-20" />
+                  <p className="font-bold text-sm">Nenhum envio registrado</p>
+                </div>
+              ) : (
+                sentHistory.map((h, i) => (
+                  <div key={i} className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-bold text-zinc-900 text-sm">{h.tenant}</p>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">{h.date}</p>
+                    </div>
+                    <div className="flex items-center gap-5 text-right flex-shrink-0">
+                      <div>
+                        <p className="text-lg font-black text-zinc-900">{h.responses}</p>
+                        <p className="text-[9px] font-black text-zinc-400 uppercase">Respostas</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-black text-emerald-600">{h.adhesion}%</p>
+                        <p className="text-[9px] font-black text-zinc-400 uppercase">Adesão</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }
