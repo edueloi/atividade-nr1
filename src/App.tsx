@@ -32,6 +32,7 @@ import { AdminUsersView } from './modules/Admin/AdminUsersView.js';
 import { AdminFormsView } from './modules/Admin/AdminFormsView.js';
 import { AdminReportsView } from './modules/Admin/AdminReportsView.js';
 import { AdminAuditView } from './modules/Admin/AdminAuditView.js';
+import { GROView } from './modules/GRO/GROView.js';
 import { fetchTenants } from './services/api.js';
 
 // Types
@@ -88,9 +89,17 @@ export default function App() {
 
   const handleLogin = (role: string, tenantId: string | null) => {
     const tenant = tenants.find(t => t.id === tenantId);
+    const nameMap: Record<string, string> = {
+      admin_atividade: 'Admin Atividade',
+      professional: 'Ricardo Prof',
+      tecnico_sst: 'Carlos Técnico',
+      client: 'Eng. Carlos (Cliente)',
+      auditor: 'Auditor Externo',
+    };
+    (window as any).__atividade_role = role;
     setUser({
       id: 'user-1',
-      name: role === 'admin_atividade' ? 'Admin Atividade' : role === 'tecnico_sst' ? 'Carlos Técnico' : 'Ricardo Prof',
+      name: nameMap[role] || role,
       role: role as Role,
       tenantId: tenantId || undefined,
       tenantName: tenant?.name
@@ -109,6 +118,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    (window as any).__atividade_role = null;
     setUser(null);
     setSelectedTenant(null);
     setActiveTab('home');
@@ -167,6 +177,20 @@ export default function App() {
             </div>
           )}
 
+          {/* Read-only banners */}
+          {user.role === 'client' && (
+            <div className="mb-6 px-5 py-3 bg-violet-600 text-white rounded-2xl flex items-center gap-3">
+              <div className="w-2 h-2 bg-white rounded-full" />
+              <span className="text-sm font-bold">SOMENTE LEITURA — Portal do Cliente · {selectedTenant?.name}</span>
+            </div>
+          )}
+          {user.role === 'auditor' && (
+            <div className="mb-6 px-5 py-3 bg-amber-500 text-white rounded-2xl flex items-center gap-3">
+              <div className="w-2 h-2 bg-white rounded-full" />
+              <span className="text-sm font-bold">MODO AUDITOR — Somente Exportação · {selectedTenant?.name}</span>
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
             {activeTab === 'home' && <HomeView key="home" />}
             {activeTab === 'dashboard' && <MonthlyDashboardView key="dashboard" />}
@@ -206,6 +230,9 @@ export default function App() {
             {activeTab === 'action_plans' && <ActionPlansView key="action_plans" />}
             {activeTab === 'evidence' && <EvidenceView key="evidence" />}
             {activeTab === 'campaigns' && <CampaignsView key="campaigns" />}
+            {activeTab === 'gro' && selectedTenant && (
+              <GROView tenant={selectedTenant} user={user} />
+            )}
             {activeTab === 'closing' && selectedTenant && (
               <ClosingView 
                 key="closing" 

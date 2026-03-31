@@ -9,18 +9,24 @@ const ROLE_LABEL: Record<AdminUserRole, string> = {
   admin_atividade: 'Administrador',
   professional: 'Profissional',
   tecnico_sst: 'Técnico SST',
+  client: 'Cliente',
+  auditor: 'Auditor',
 };
 
 const ROLE_COLOR: Record<AdminUserRole, string> = {
   admin_atividade: 'bg-zinc-100 text-zinc-700',
   professional: 'bg-emerald-100 text-emerald-700',
   tecnico_sst: 'bg-blue-100 text-blue-700',
+  client: 'bg-violet-100 text-violet-700',
+  auditor: 'bg-amber-100 text-amber-700',
 };
 
 const ROLE_ICON: Record<AdminUserRole, React.ReactNode> = {
   admin_atividade: <Shield size={16} />,
   professional: <User size={16} />,
   tecnico_sst: <HardHat size={16} />,
+  client: <User size={16} />,
+  auditor: <Shield size={16} />,
 };
 
 export const AdminUsersView: React.FC<{ tenants: any[] }> = ({ tenants }) => {
@@ -105,7 +111,7 @@ export const AdminUsersView: React.FC<{ tenants: any[] }> = ({ tenants }) => {
             className="w-full pl-11 pr-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10" />
         </div>
         <div className="flex gap-2">
-          {(['all', 'admin_atividade', 'professional', 'tecnico_sst'] as const).map(r => (
+          {(['all', 'admin_atividade', 'professional', 'tecnico_sst', 'client', 'auditor'] as const).map(r => (
             <button key={r} onClick={() => setRoleFilter(r)}
               className={`px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
                 roleFilter === r ? 'bg-zinc-900 text-white' : 'bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900'
@@ -192,6 +198,8 @@ export const AdminUsersView: React.FC<{ tenants: any[] }> = ({ tenants }) => {
                       className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10">
                       <option value="professional">Profissional</option>
                       <option value="tecnico_sst">Técnico SST</option>
+                      <option value="client">Cliente</option>
+                      <option value="auditor">Auditor</option>
                       <option value="admin_atividade">Administrador</option>
                     </select>
                   </div>

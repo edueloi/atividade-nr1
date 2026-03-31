@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import LogoBranco from "../../../images/LOGO-BRANCO-ATIVIDADE.png";
 import { motion } from "motion/react";
-import { Shield, User, ChevronRight, ArrowRight, Lock, Activity, HardHat } from "lucide-react";
+import { Shield, User, ChevronRight, ArrowRight, Lock, Activity, HardHat, Eye, ShieldCheck } from "lucide-react";
 
 interface LoginViewProps {
   tenants: any[];
@@ -10,7 +10,7 @@ interface LoginViewProps {
 
 export function LoginView({ tenants, onLogin }: LoginViewProps) {
   const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
-  const [view, setView] = useState<"initial" | "tenant" | "tenant_tecnico">("initial");
+  const [view, setView] = useState<"initial" | "tenant" | "tenant_tecnico" | "tenant_client" | "tenant_auditor">("initial");
 
   return (
     <div className="min-h-screen bg-white flex flex-col lg:flex-row overflow-hidden">
@@ -117,6 +117,42 @@ export function LoginView({ tenants, onLogin }: LoginViewProps) {
                   </div>
                   <ChevronRight className="text-zinc-300 group-hover:text-blue-600 transition-colors" />
                 </button>
+
+                <button
+                  onClick={() => setView("tenant_client")}
+                  className="w-full group p-6 bg-white border border-zinc-200 rounded-[32px] flex items-center gap-6 hover:border-violet-600 hover:shadow-xl hover:shadow-violet-100/50 transition-all text-left"
+                >
+                  <div className="w-14 h-14 bg-violet-100 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <Eye className="text-violet-600" size={28} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-zinc-900 text-lg">
+                      Cliente
+                    </h3>
+                    <p className="text-zinc-500 text-sm">
+                      Portal do cliente — dashboards e evidências
+                    </p>
+                  </div>
+                  <ChevronRight className="text-zinc-300 group-hover:text-violet-600 transition-colors" />
+                </button>
+
+                <button
+                  onClick={() => setView("tenant_auditor")}
+                  className="w-full group p-6 bg-white border border-zinc-200 rounded-[32px] flex items-center gap-6 hover:border-amber-600 hover:shadow-xl hover:shadow-amber-100/50 transition-all text-left"
+                >
+                  <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <ShieldCheck className="text-amber-600" size={28} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-zinc-900 text-lg">
+                      Auditor
+                    </h3>
+                    <p className="text-zinc-500 text-sm">
+                      Auditoria — trilha, evidências e exportação
+                    </p>
+                  </div>
+                  <ChevronRight className="text-zinc-300 group-hover:text-amber-600 transition-colors" />
+                </button>
               </>
             ) : (
               <motion.div
@@ -132,7 +168,7 @@ export function LoginView({ tenants, onLogin }: LoginViewProps) {
                     <ArrowRight className="rotate-180 w-4 h-4" /> Voltar
                   </button>
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                    {view === 'tenant_tecnico' ? 'Técnico SST' : 'Profissional'} — Selecionar Contrato
+                    {view === 'tenant_tecnico' ? 'Técnico SST' : view === 'tenant_client' ? 'Cliente' : view === 'tenant_auditor' ? 'Auditor' : 'Profissional'} — Selecionar Contrato
                   </span>
                 </div>
 
@@ -140,11 +176,16 @@ export function LoginView({ tenants, onLogin }: LoginViewProps) {
                   {tenants.map((t) => (
                     <button
                       key={t.id}
-                      onClick={() => onLogin(view === 'tenant_tecnico' ? 'tecnico_sst' : 'professional', t.id)}
+                      onClick={() => onLogin(
+                        view === 'tenant_tecnico' ? 'tecnico_sst' : 
+                        view === 'tenant_client' ? 'client' : 
+                        view === 'tenant_auditor' ? 'auditor' : 'professional', t.id
+                      )}
                       className={`w-full p-5 bg-white border border-zinc-200 rounded-2xl flex items-center justify-between transition-all group ${
-                        view === 'tenant_tecnico' 
-                          ? 'hover:border-blue-600 hover:bg-blue-50/30' 
-                          : 'hover:border-emerald-600 hover:bg-emerald-50/30'
+                        view === 'tenant_tecnico' ? 'hover:border-blue-600 hover:bg-blue-50/30' :
+                        view === 'tenant_client' ? 'hover:border-violet-600 hover:bg-violet-50/30' :
+                        view === 'tenant_auditor' ? 'hover:border-amber-600 hover:bg-amber-50/30' :
+                        'hover:border-emerald-600 hover:bg-emerald-50/30'
                       }`}
                     >
                       <div className="flex items-center gap-4">

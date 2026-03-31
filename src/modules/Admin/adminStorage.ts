@@ -33,7 +33,7 @@ export interface AdminContractRecord {
   lastUpdate: string;
 }
 
-export type AdminUserRole = 'admin_atividade' | 'professional' | 'tecnico_sst';
+export type AdminUserRole = 'admin_atividade' | 'professional' | 'tecnico_sst' | 'client' | 'auditor';
 
 export interface AdminUser {
   id: string;
@@ -145,6 +145,8 @@ const defaultUsers: AdminUser[] = [
   { id: 'u3', name: 'Ana Paula Mendes', email: 'ana.paula@atividade.com.br', role: 'professional', tenantId: 'usina-pilon', status: 'active', createdAt: '2025-03-10T09:00:00Z' },
   { id: 'u4', name: 'Carlos Eduardo', email: 'carlos@atividade.com.br', role: 'tecnico_sst', tenantId: 'toyota-br', status: 'active', createdAt: '2025-06-01T14:00:00Z' },
   { id: 'u5', name: 'Juliana Ferraz', email: 'juliana@atividade.com.br', role: 'tecnico_sst', tenantId: 'usina-pilon', status: 'pending', createdAt: '2026-03-20T11:00:00Z' },
+  { id: 'u6', name: 'Eng. Carlos Tanaka', email: 'carlos.tanaka@toyota.com.br', role: 'client', tenantId: 'toyota-br', status: 'active', createdAt: '2025-04-01T09:00:00Z' },
+  { id: 'u7', name: 'Auditor Externo', email: 'auditor@auditoria.com.br', role: 'auditor', tenantId: null, status: 'active', createdAt: '2025-05-15T10:00:00Z' },
 ];
 
 export function loadAdminUsers(): AdminUser[] {

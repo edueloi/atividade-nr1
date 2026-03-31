@@ -26,6 +26,9 @@ interface SidebarProps {
 export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, userRole, selectedTenant, onLogout, onBackToAdmin }: SidebarProps) {
   const isGlobalPanel = userRole === 'admin_atividade' && !selectedTenant;
   const isTecnicoSST = userRole === 'tecnico_sst';
+  const isClient = userRole === 'client';
+  const isAuditor = userRole === 'auditor';
+  const isReadOnly = isClient || isAuditor;
 
   return (
     <motion.aside 
@@ -98,18 +101,20 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
               onClick={() => setActiveTab('strategic')} 
               collapsed={collapsed}
             />
-            <NavItem 
-              icon={<Rocket size={20} />} 
-              label="Dash Implantação" 
-              active={activeTab === 'implementation'} 
-              onClick={() => setActiveTab('implementation')} 
-              collapsed={collapsed}
-            />
+            {!isReadOnly && (
+              <NavItem 
+                icon={<Rocket size={20} />} 
+                label="Dash Implantação" 
+                active={activeTab === 'implementation'} 
+                onClick={() => setActiveTab('implementation')} 
+                collapsed={collapsed}
+              />
+            )}
           </div>
         )}
 
         {/* LANÇAMENTOS */}
-        {!isGlobalPanel && (
+        {!isGlobalPanel && !isReadOnly && (
           <div>
             {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Lançamentos</p>}
             <NavItem 
@@ -171,7 +176,7 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
         )}
 
         {/* GESTÃO */}
-        {!isGlobalPanel && !isTecnicoSST && (
+        {!isGlobalPanel && !isTecnicoSST && !isReadOnly && (
           <div>
             {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Gestão</p>}
             <NavItem 
@@ -179,6 +184,13 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
               label="Plano de Ação" 
               active={activeTab === 'action_plans'} 
               onClick={() => setActiveTab('action_plans')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<ShieldAlert size={20} />} 
+              label="GRO / PGR" 
+              active={activeTab === 'gro'} 
+              onClick={() => setActiveTab('gro')} 
               collapsed={collapsed}
             />
             <NavItem 
@@ -209,6 +221,36 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
               onClick={() => setActiveTab('reports')} 
               collapsed={collapsed}
             />
+          </div>
+        )}
+
+        {/* GESTÃO READ-ONLY (Client / Auditor) */}
+        {!isGlobalPanel && isReadOnly && (
+          <div>
+            {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Consulta</p>}
+            <NavItem 
+              icon={<FileImage size={20} />} 
+              label="Evidências" 
+              active={activeTab === 'evidence'} 
+              onClick={() => setActiveTab('evidence')} 
+              collapsed={collapsed}
+            />
+            <NavItem 
+              icon={<FileDown size={20} />} 
+              label="Relatórios" 
+              active={activeTab === 'reports'} 
+              onClick={() => setActiveTab('reports')} 
+              collapsed={collapsed}
+            />
+            {isAuditor && (
+              <NavItem 
+                icon={<ScrollText size={20} />} 
+                label="Auditoria / Logs" 
+                active={activeTab === 'admin_audit'} 
+                onClick={() => setActiveTab('admin_audit')} 
+                collapsed={collapsed}
+              />
+            )}
           </div>
         )}
 

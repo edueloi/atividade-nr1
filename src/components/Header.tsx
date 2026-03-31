@@ -48,7 +48,13 @@ const tabNames: Record<string, string> = {
   campaigns: 'Campanhas',
   closing: 'Fechamento',
   reports: 'Relatórios',
-  admin: 'Administração'
+  admin: 'Administração',
+  admin_companies: 'Empresas',
+  admin_users: 'Usuários & Acessos',
+  admin_forms: 'Formulários Globais',
+  admin_reports: 'Relatórios Consolidados',
+  admin_audit: 'Auditoria / Logs',
+  gro: 'GRO / PGR'
 };
 
 export function Header({ 
