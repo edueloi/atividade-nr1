@@ -183,10 +183,20 @@ function wrapText(text: string, maxChars = 86) {
 }
 
 function encodePdfHex(text: string) {
-  let hex = 'FEFF';
+  let hex = '';
 
   for (let index = 0; index < text.length; index += 1) {
-    hex += text.charCodeAt(index).toString(16).padStart(4, '0').toUpperCase();
+    let code = text.charCodeAt(index);
+    if (code === 0x2013) code = 150;
+    else if (code === 0x2014) code = 151;
+    else if (code === 0x2018) code = 145;
+    else if (code === 0x2019) code = 146;
+    else if (code === 0x201C) code = 147;
+    else if (code === 0x201D) code = 148;
+    else if (code === 0x2022) code = 149;
+    else if (code > 255) code = 63;
+    
+    hex += code.toString(16).padStart(2, '0').toUpperCase();
   }
 
   return `<${hex}>`;
@@ -267,7 +277,7 @@ function buildPdfBlob(title: string, subtitle: string, sections: PdfSection[]) {
     objects.push(`${contentObjectId} 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`);
   });
 
-  objects.push(`${fontObjectId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj`);
+  objects.push(`${fontObjectId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> endobj`);
 
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
