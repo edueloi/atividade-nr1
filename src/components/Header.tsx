@@ -36,7 +36,7 @@ const tabNames: Record<string, string> = {
   dashboard: 'Dash Mensal',
   strategic: 'Dash Estratégico',
   implementation: 'Dash Implantação',
-  gym: 'Aula + Presença',
+  gym: 'Ginastica Laboral',
   physio: 'Fisioterapia',
   complaints: 'Queixas',
   absenteeism: 'Absenteísmo',
@@ -83,7 +83,7 @@ export function Header({
   const createActions = [
     { id: 'complaint', label: 'Nova Queixa', icon: <AlertCircle className="w-4 h-4" />, color: 'text-rose-600 bg-rose-50' },
     { id: 'absenteeism', label: 'Novo Atestado', icon: <FileText className="w-4 h-4" />, color: 'text-amber-600 bg-amber-50' },
-    { id: 'gym', label: 'Nova Aula + Presença', icon: <Activity className="w-4 h-4" />, color: 'text-emerald-600 bg-emerald-50' },
+    { id: 'gym', label: 'Nova Ginastica Laboral', icon: <Activity className="w-4 h-4" />, color: 'text-emerald-600 bg-emerald-50' },
     { id: 'admissional', label: 'Nova Avaliação', icon: <Stethoscope className="w-4 h-4" />, color: 'text-purple-600 bg-purple-50' },
     { id: 'physio', label: 'Novo Registro Fisio', icon: <Zap className="w-4 h-4" />, color: 'text-blue-600 bg-blue-50' },
   ];
@@ -92,7 +92,7 @@ export function Header({
     switch (activeTab) {
       case 'complaints': return [{ label: 'Configurar campos e catálogos', icon: <Settings className="w-4 h-4" /> }];
       case 'absenteeism': return [{ label: 'Regras de visibilidade', icon: <Shield className="w-4 h-4" /> }];
-      case 'gym': return [{ label: 'Configurar metas', icon: <Zap className="w-4 h-4" /> }];
+      case 'gym': return [{ label: 'Configurar turma e presenca', icon: <Zap className="w-4 h-4" /> }];
       case 'nr1': return [{ label: 'Configurar privacidade', icon: <Shield className="w-4 h-4" /> }];
       default: return [];
     }

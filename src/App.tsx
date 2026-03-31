@@ -14,6 +14,7 @@ import { MonthlyDashboardView } from './modules/Dashboard/MonthlyDashboard.js';
 import { StrategicDashboardView } from './modules/Dashboard/StrategicDashboard.js';
 import { ImplementationDashboardView } from './modules/Dashboard/ImplementationDashboard.js';
 import { GymView } from './modules/Gym/GymView.js';
+import { GymExternalForm } from './modules/Gym/GymExternalForm.js';
 import { PhysioView } from './modules/Physio/PhysioView.js';
 import { ComplaintsView } from './modules/Complaints/ComplaintsView.js';
 import { NR1View } from './modules/NR1/NR1View.js';
@@ -59,14 +60,20 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showQuickLaunch, setShowQuickLaunch] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [externalToken, setExternalToken] = useState<string | null>(null);
+  const [externalRoute, setExternalRoute] = useState<{ type: 'nr1' | 'gym'; token: string } | null>(null);
 
-  // Check for external NR1 route
+  // Check for external public routes
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith('/nr1/s/')) {
       const token = path.split('/').pop();
-      if (token) setExternalToken(token);
+      if (token) setExternalRoute({ type: 'nr1', token });
+      return;
+    }
+
+    if (path.startsWith('/gym/s/')) {
+      const token = path.split('/').pop();
+      if (token) setExternalRoute({ type: 'gym', token });
     }
   }, []);
 
@@ -129,8 +136,12 @@ export default function App() {
     setActiveTab('admin');
   };
 
-  if (externalToken) {
-    return <ExternalForm token={externalToken} />;
+  if (externalRoute?.type === 'nr1') {
+    return <ExternalForm token={externalRoute.token} />;
+  }
+
+  if (externalRoute?.type === 'gym') {
+    return <GymExternalForm token={externalRoute.token} />;
   }
 
   if (!user) {

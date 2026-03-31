@@ -1,276 +1,678 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Calendar, Clock, Users, CheckCircle2, 
-  Play, Plus, Filter, Search, Download,
-  ChevronRight, ArrowLeft, Camera, MessageSquare,
-  QrCode, ListChecks, Hash, X, Save, AlertTriangle,
-  TrendingUp, BarChart3, MoreVertical, Copy, Trash2
+import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import {
+  BarChart3,
+  CalendarDays,
+  CheckCircle2,
+  ExternalLink,
+  LayoutList,
+  Link2,
+  MessageSquare,
+  PencilLine,
+  Play,
+  Plus,
+  RefreshCw,
+  Save,
+  Star,
+  Trash2,
+  Users,
+  X,
 } from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, LineChart, Line, Legend
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
-import { fetchTodayClasses, startClassSession, saveAttendance, finishClassSession, fetchSchedules, fetchAttendanceSummary } from '../../services/api';
+import {
+  createAdhocGymSession,
+  createGymExternalShare,
+  loadGymTenantState,
+  removeGymSchedule,
+  saveGymSession,
+  upsertGymSchedule,
+  type GymExternalShare,
+  type GymExercise,
+  type GymParticipant,
+  type GymSchedule,
+  type GymSession,
+  type GymTenantState,
+} from './gymStorage.js';
 
 interface GymViewProps {
   tenant: { id: string; name: string };
   user: { id: string; name: string; role: string };
 }
 
-export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'today' | 'calendar' | 'reports'>('today');
-  const [classes, setClasses] = useState<any[]>([]);
-  const [schedules, setSchedules] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [executingClass, setExecutingClass] = useState<any | null>(null);
-  const [execStep, setExecStep] = useState(1);
-  const [attendanceMethod, setAttendanceMethod] = useState<'count' | 'qr' | 'list'>('count');
-  const [counts, setCounts] = useState({ expected: 0, present: 0 });
-  const [notes, setNotes] = useState('');
-  const [summary, setSummary] = useState<any>(null);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [editingSchedule, setEditingSchedule] = useState<any | null>(null);
+const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 
-  const isAdmin = user.role === 'admin_atividade';
+function formatIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function createLocalId(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function cloneValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function presentCount(session: GymSession) {
+  return session.participants.filter((participant) => participant.present).length;
+}
+
+function attendanceRate(session: GymSession) {
+  if (session.expectedCount <= 0) return 0;
+  return Math.round((presentCount(session) / session.expectedCount) * 100);
+}
+
+function feedbackAverage(session: GymSession) {
+  const scores = session.participants
+    .map((participant) => participant.feedbackScore)
+    .filter((value): value is number => typeof value === 'number');
+
+  if (scores.length === 0) return null;
+  return Number((scores.reduce((sum, value) => sum + value, 0) / scores.length).toFixed(1));
+}
+
+function sessionStatusLabel(status: GymSession['status']) {
+  if (status === 'running') return 'Em andamento';
+  if (status === 'finished') return 'Concluida';
+  return 'Planejada';
+}
+
+function sessionStatusClass(status: GymSession['status']) {
+  if (status === 'running') return 'bg-amber-50 text-amber-700';
+  if (status === 'finished') return 'bg-emerald-50 text-emerald-700';
+  return 'bg-blue-50 text-blue-700';
+}
+
+function buildShareUrl(token: string) {
+  if (typeof window === 'undefined') {
+    return `/gym/s/${token}`;
+  }
+  return `${window.location.origin}/gym/s/${token}`;
+}
+
+function sanitizeExercise(exercise: GymExercise, index: number): GymExercise | null {
+  const name = exercise.name.trim();
+  if (!name) return null;
+
+  return {
+    ...exercise,
+    id: exercise.id || createLocalId(`exercise-${index}`),
+    name,
+    focus: exercise.focus.trim() || 'Pausa ativa',
+    durationMinutes: Math.max(1, exercise.durationMinutes || 1),
+  };
+}
+
+function sanitizeParticipant(participant: GymParticipant, index: number): GymParticipant | null {
+  const hasContent =
+    participant.name.trim() ||
+    participant.badge.trim() ||
+    participant.role.trim() ||
+    participant.present ||
+    participant.feedbackComment ||
+    participant.feedbackScore !== undefined;
+
+  if (!hasContent) return null;
+
+  return {
+    ...participant,
+    id: participant.id || createLocalId(`participant-${index}`),
+    name: participant.name.trim() || `Colaborador ${String(index + 1).padStart(2, '0')}`,
+    badge: participant.badge.trim() || `GL-${String(index + 1).padStart(3, '0')}`,
+    role: participant.role.trim() || 'Equipe',
+    favoriteExercise: participant.favoriteExercise?.trim(),
+    feedbackComment: participant.feedbackComment?.trim(),
+  };
+}
+
+function MetricCard({
+  title,
+  value,
+  hint,
+  icon,
+}: {
+  title: string;
+  value: string;
+  hint: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-[30px] border border-zinc-200 shadow-sm p-6">
+      <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-700 flex items-center justify-center mb-4">
+        {icon}
+      </div>
+      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400 mb-2">{title}</p>
+      <div className="text-3xl font-black text-zinc-900">{value}</div>
+      <p className="text-sm text-zinc-500 mt-2">{hint}</p>
+    </div>
+  );
+}
+
+export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'operation' | 'schedule' | 'reports'>('operation');
+  const [data, setData] = useState<GymTenantState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sessionDraft, setSessionDraft] = useState<GymSession | null>(null);
+  const [scheduleDraft, setScheduleDraft] = useState<GymSchedule | null>(null);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  const todayKey = formatIsoDate(new Date());
+
+  const loadData = () => {
+    setLoading(true);
+    const nextState = loadGymTenantState(tenant.id, tenant.name);
+    setData(nextState);
+    setLoading(false);
+  };
 
   useEffect(() => {
     loadData();
-  }, [tenant.id, activeSubTab]);
+  }, [tenant.id, tenant.name]);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      if (activeSubTab === 'today') {
-        const data = await fetchTodayClasses(tenant.id, user.id);
-        setClasses(data);
-      } else if (activeSubTab === 'calendar') {
-        const data = await fetchSchedules(tenant.id);
-        setSchedules(data);
-      } else if (activeSubTab === 'reports') {
-        const data = await fetchAttendanceSummary(tenant.id, 2026);
-        setSummary(data);
+  const shareMap = new Map<string, GymExternalShare>((data?.externalShares ?? []).map((share) => [share.token, share]));
+  const todaySessions = (data?.sessions ?? [])
+    .filter((session) => session.date === todayKey)
+    .sort((left, right) => left.startTime.localeCompare(right.startTime));
+  const monthlySessions = (data?.sessions ?? []).filter((session) => session.date.startsWith(todayKey.slice(0, 7)));
+  const activeShares: GymExternalShare[] = (data?.externalShares ?? []).filter((share) => share.status === 'active');
+  const totalExpectedToday = todaySessions.reduce((sum, session) => sum + session.expectedCount, 0);
+  const totalPresentToday = todaySessions.reduce((sum, session) => sum + presentCount(session), 0);
+  const averageAttendanceToday = totalExpectedToday > 0 ? Math.round((totalPresentToday / totalExpectedToday) * 100) : 0;
+  const feedbackValues = todaySessions
+    .map((session) => feedbackAverage(session))
+    .filter((value): value is number => typeof value === 'number');
+  const averageFeedbackToday = feedbackValues.length > 0
+    ? (feedbackValues.reduce((sum, value) => sum + value, 0) / feedbackValues.length).toFixed(1)
+    : '-';
+  const latestSnapshot = data?.monthlySnapshots[data.monthlySnapshots.length - 1];
+
+  const sectorPerformanceMap = new Map<
+    string,
+    { planned: number; active: number; expected: number; present: number; feedback: number[] }
+  >();
+
+  monthlySessions.forEach((session) => {
+    const current = sectorPerformanceMap.get(session.sectorName) || {
+      planned: 0,
+      active: 0,
+      expected: 0,
+      present: 0,
+      feedback: [],
+    };
+
+    current.planned += 1;
+    if (session.status !== 'planned') current.active += 1;
+    current.expected += session.expectedCount;
+    current.present += presentCount(session);
+    session.participants.forEach((participant) => {
+      if (typeof participant.feedbackScore === 'number') {
+        current.feedback.push(participant.feedbackScore);
       }
-    } catch (error) {
-      console.error('Error loading gym data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStartClass = async (cls: any) => {
-    await startClassSession(cls.id);
-    setExecutingClass({ ...cls, status: 'running' });
-    setCounts({ expected: cls.expected_count || 20, present: 0 });
-    setExecStep(1);
-  };
-
-  const handleSaveAttendance = async () => {
-    await saveAttendance(executingClass.id, {
-      expectedCount: counts.expected,
-      presentCount: counts.present,
-      method: attendanceMethod
     });
-    setExecStep(3);
+    sectorPerformanceMap.set(session.sectorName, current);
+  });
+
+  const sectorRows = Array.from(sectorPerformanceMap.entries())
+    .map(([sector, metrics]) => ({
+      sector,
+      planned: metrics.planned,
+      active: metrics.active,
+      rate: metrics.expected > 0 ? Math.round((metrics.present / metrics.expected) * 100) : 0,
+      feedback: metrics.feedback.length > 0
+        ? Number((metrics.feedback.reduce((sum, value) => sum + value, 0) / metrics.feedback.length).toFixed(1))
+        : null,
+    }))
+    .sort((left, right) => right.rate - left.rate);
+
+  const feedbackNotes = monthlySessions.flatMap((session) =>
+    session.participants
+      .filter((participant) => participant.feedbackComment)
+      .map((participant) => ({
+        sessionId: session.id,
+        sector: session.sectorName,
+        name: participant.name,
+        comment: participant.feedbackComment as string,
+      })),
+  );
+
+  const openSession = (session: GymSession) => {
+    setSessionDraft(cloneValue(session));
   };
 
-  const handleFinishClass = async () => {
-    // If there's a photo, we'd upload it here
-    // await uploadClassEvidence(executingClass.id, { ... })
-    
-    await finishClassSession(executingClass.id, notes);
-    setExecutingClass(null);
-    loadData();
+  const copyShareLink = async (token: string) => {
+    const url = buildShareUrl(token);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+    }
+    setCopiedToken(token);
+    window.setTimeout(() => setCopiedToken((current) => (current === token ? null : current)), 2200);
   };
+
+  const handleCreateShare = async (sessionId: string) => {
+    const created = createGymExternalShare(tenant.id, tenant.name, sessionId);
+    if (!created) return;
+    loadData();
+    const refreshed = loadGymTenantState(tenant.id, tenant.name);
+    const nextSession = refreshed.sessions.find((session) => session.id === sessionId);
+    if (nextSession && sessionDraft?.id === sessionId) {
+      setSessionDraft(cloneValue(nextSession));
+    }
+    await copyShareLink(created.token);
+  };
+
+  const handleCreateAdhocSession = () => {
+    const created = createAdhocGymSession(tenant.id, tenant.name, user.name);
+    loadData();
+    setSessionDraft(cloneValue(created));
+  };
+
+  const handlePersistSession = (nextStatus?: GymSession['status']) => {
+    if (!sessionDraft) return;
+
+    const exercises = sessionDraft.exercises
+      .map((exercise, index) => sanitizeExercise(exercise, index))
+      .filter((exercise): exercise is GymExercise => Boolean(exercise));
+    const participants = sessionDraft.participants
+      .map((participant, index) => sanitizeParticipant(participant, index))
+      .filter((participant): participant is GymParticipant => Boolean(participant));
+
+    const cleanedSession: GymSession = {
+      ...sessionDraft,
+      status: nextStatus || sessionDraft.status,
+      exercises: exercises.length > 0 ? exercises : [{
+        id: createLocalId('exercise'),
+        name: 'Alongamento rapido',
+        focus: 'Pausa ativa',
+        durationMinutes: 5,
+        completed: nextStatus === 'finished',
+      }],
+      participants,
+      expectedCount: Math.max(sessionDraft.expectedCount, participants.length),
+      notes: sessionDraft.notes.trim(),
+      unitName: sessionDraft.unitName.trim() || tenant.name,
+      sectorName: sessionDraft.sectorName.trim() || 'Turma sem setor',
+      shiftName: sessionDraft.shiftName.trim() || 'Turno em definicao',
+      instructorName: sessionDraft.instructorName.trim() || user.name,
+    };
+
+    saveGymSession(tenant.id, tenant.name, cleanedSession);
+    loadData();
+    setSessionDraft(cloneValue(cleanedSession));
+  };
+
+  const openScheduleEditor = (schedule?: GymSchedule) => {
+    if (schedule) {
+      setScheduleDraft(cloneValue(schedule));
+      return;
+    }
+
+    const templateExercises = cloneValue(data?.schedules[0]?.exercises || data?.sessions[0]?.exercises || []);
+    setScheduleDraft({
+      id: createLocalId('schedule'),
+      tenantId: tenant.id,
+      unitName: tenant.name,
+      sectorName: '',
+      shiftName: '',
+      dayOfWeek: 1,
+      startTime: '08:00',
+      durationMinutes: 10,
+      expectedCount: 10,
+      instructorName: user.name,
+      exercises: templateExercises,
+    });
+  };
+
+  const saveScheduleDraft = () => {
+    if (!scheduleDraft) return;
+    upsertGymSchedule(tenant.id, tenant.name, {
+      ...scheduleDraft,
+      unitName: scheduleDraft.unitName.trim() || tenant.name,
+      sectorName: scheduleDraft.sectorName.trim() || 'Nova recorrencia',
+      shiftName: scheduleDraft.shiftName.trim() || 'Turno padrao',
+      instructorName: scheduleDraft.instructorName.trim() || user.name,
+      durationMinutes: Math.max(5, scheduleDraft.durationMinutes),
+      expectedCount: Math.max(1, scheduleDraft.expectedCount),
+    });
+    loadData();
+    setScheduleDraft(null);
+  };
+
+  const deleteScheduleDraft = () => {
+    if (!scheduleDraft) return;
+    removeGymSchedule(tenant.id, tenant.name, scheduleDraft.id);
+    loadData();
+    setScheduleDraft(null);
+  };
+
+  if (loading || !data) {
+    return (
+      <div className="bg-white rounded-[32px] border border-zinc-200 shadow-sm p-10 text-center">
+        <div className="w-12 h-12 mx-auto rounded-full border-4 border-zinc-200 border-t-emerald-500 animate-spin" />
+        <p className="text-zinc-500 font-medium mt-4">Carregando operacao de ginastica laboral...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-1 bg-zinc-100/50 p-1 rounded-2xl border border-zinc-200/50">
-          <button 
-            onClick={() => setActiveSubTab('today')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'today' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold uppercase tracking-[0.2em]">
+            <Users size={14} />
+            Ginastica Laboral
+          </div>
+          <h1 className="text-3xl font-black text-zinc-900 mt-4">Execucao, presenca nominal e retorno da turma</h1>
+          <p className="text-zinc-500 mt-2 max-w-3xl">
+            Cada turma pode ter sequencia de exercicios, lista editavel, formulario externo e consolidacao de aderencia no proprio modulo.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={loadData}
+            className="px-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-colors flex items-center gap-2"
           >
-            Hoje
+            <RefreshCw size={16} />
+            Recarregar
           </button>
-          <button 
-            onClick={() => setActiveSubTab('calendar')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'calendar' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
+          <button
+            onClick={handleCreateAdhocSession}
+            className="px-4 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-lg shadow-emerald-100"
           >
-            Calendário
-          </button>
-          <button 
-            onClick={() => setActiveSubTab('reports')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeSubTab === 'reports' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-400 hover:text-zinc-600'}`}
-          >
-            Relatórios
+            <Plus size={16} />
+            Nova turma avulsa
           </button>
         </div>
       </div>
 
-      {/* Content */}
-      <AnimatePresence mode="wait">
-        {activeSubTab === 'today' && (
-          <motion.div 
-            key="today"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="space-y-6"
+      <div className="flex flex-wrap items-center gap-2 bg-zinc-100/70 border border-zinc-200 rounded-2xl p-1">
+        {[
+          { id: 'operation', label: 'Operacao' },
+          { id: 'schedule', label: 'Escalas' },
+          { id: 'reports', label: 'Resultados' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id as 'operation' | 'schedule' | 'reports')}
+            className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${
+              activeSubTab === tab.id ? 'bg-white text-emerald-700 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
+            }`}
           >
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                <input type="text" placeholder="Buscar setor ou turno..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
-              </div>
-              <button className="px-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm font-bold text-zinc-600 flex items-center gap-2 hover:bg-zinc-50">
-                <Filter className="w-4 h-4" />
-                Filtros
-              </button>
-              <button className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 shadow-sm">
-                <Plus className="w-4 h-4" />
-                Lançar Avulsa
-              </button>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {activeSubTab === 'operation' && (
+          <motion.div
+            key="operation"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="space-y-8"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+              <MetricCard
+                title="Turmas do dia"
+                value={todaySessions.length.toString()}
+                hint={`${todaySessions.filter((session) => session.status === 'running').length} em andamento agora`}
+                icon={<LayoutList size={20} />}
+              />
+              <MetricCard
+                title="Presenca contabilizada"
+                value={`${totalPresentToday}/${totalExpectedToday || 0}`}
+                hint={`Aderencia media de ${averageAttendanceToday}%`}
+                icon={<Users size={20} />}
+              />
+              <MetricCard
+                title="Formularios ativos"
+                value={activeShares.length.toString()}
+                hint="Links externos em coleta agora"
+                icon={<Link2 size={20} />}
+              />
+              <MetricCard
+                title="Retorno da turma"
+                value={averageFeedbackToday.toString()}
+                hint="Media da avaliacao registrada hoje"
+                icon={<Star size={20} />}
+              />
             </div>
 
-            {/* Class Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {classes.map((cls) => (
-                <div key={cls.id} className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm hover:border-emerald-200 transition-all group">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                        cls.status === 'finished' ? 'bg-emerald-100 text-emerald-600' : 
-                        cls.status === 'running' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
-                      }`}>
-                        <Clock className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-zinc-900">{cls.sector_name}</h3>
-                        <p className="text-xs text-zinc-500">{cls.shift_name} • {cls.duration_minutes} min</p>
+            <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.5fr)_360px] gap-6">
+              <div className="space-y-5">
+                {todaySessions.map((session) => {
+                  const share = session.externalShareToken ? shareMap.get(session.externalShareToken) : undefined;
+                  const feedback = feedbackAverage(session);
+                  const rate = attendanceRate(session);
+
+                  return (
+                    <div key={session.id} className="bg-white rounded-[32px] border border-zinc-200 shadow-sm p-6">
+                      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+                        <div className="space-y-4 flex-1">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] ${sessionStatusClass(session.status)}`}>
+                              {sessionStatusLabel(session.status)}
+                            </span>
+                            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+                              {session.unitName}
+                            </span>
+                          </div>
+
+                          <div>
+                            <h2 className="text-2xl font-black text-zinc-900">{session.sectorName}</h2>
+                            <p className="text-sm text-zinc-500 mt-1">
+                              {session.shiftName} · {session.startTime} · {session.durationMinutes} min · Profissional {session.instructorName}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Presentes</p>
+                              <p className="text-2xl font-black text-zinc-900">{presentCount(session)}</p>
+                              <p className="text-xs text-zinc-500 mt-2">Base esperada {session.expectedCount}</p>
+                            </div>
+                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Aderencia</p>
+                              <p className="text-2xl font-black text-zinc-900">{rate}%</p>
+                              <div className="mt-3 h-2 rounded-full bg-zinc-200 overflow-hidden">
+                                <div className={`h-full ${rate >= 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(rate, 100)}%` }} />
+                              </div>
+                            </div>
+                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Exercicios</p>
+                              <p className="text-2xl font-black text-zinc-900">{session.exercises.length}</p>
+                              <p className="text-xs text-zinc-500 mt-2">
+                                {session.exercises.filter((exercise) => exercise.completed).length} marcados na execucao
+                              </p>
+                            </div>
+                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Feedback</p>
+                              <p className="text-2xl font-black text-zinc-900">{feedback ?? '-'}</p>
+                              <p className="text-xs text-zinc-500 mt-2">
+                                {share ? `${share.submissions} respostas externas` : 'Sem link enviado'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="lg:w-[280px] space-y-3">
+                          <button
+                            onClick={() => openSession(session)}
+                            className="w-full px-4 py-3 bg-zinc-900 text-white rounded-2xl text-sm font-bold hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <PencilLine size={16} />
+                            Abrir gestao da turma
+                          </button>
+
+                          {share ? (
+                            <>
+                              <button
+                                onClick={() => copyShareLink(share.token)}
+                                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-colors flex items-center justify-center gap-2"
+                              >
+                                <Link2 size={16} />
+                                {copiedToken === share.token ? 'Link copiado' : 'Copiar link externo'}
+                              </button>
+                              <button
+                                onClick={() => window.open(buildShareUrl(share.token), '_blank', 'noopener,noreferrer')}
+                                className="w-full px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-sm font-bold text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
+                              >
+                                <ExternalLink size={16} />
+                                Abrir formulario
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => handleCreateShare(session.id)}
+                              className="w-full px-4 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                            >
+                              <MessageSquare size={16} />
+                              Gerar formulario externo
+                            </button>
+                          )}
+
+                          {share && (
+                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Coleta externa</p>
+                              <p className="text-sm font-bold text-zinc-900">{share.submissions} respostas</p>
+                              <p className="text-xs text-zinc-500 mt-1">{share.opens} acessos ao link</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
-                      cls.status === 'finished' ? 'bg-emerald-50 text-emerald-600' : 
-                      cls.status === 'running' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
-                    }`}>
-                      {cls.status === 'finished' ? 'Concluída' : cls.status === 'running' ? 'Em Andamento' : 'Planejada'}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-xs text-zinc-500 mb-6">
-                    <Users className="w-3.5 h-3.5" />
-                    <span>Prof. {cls.instructor_name || 'Ricardo'}</span>
-                  </div>
+                  );
+                })}
+              </div>
 
-                  <div className="flex items-center gap-2">
-                    {cls.status === 'planned' && (
-                      <button 
-                        onClick={() => handleStartClass(cls)}
-                        className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
-                      >
-                        <Play className="w-4 h-4 fill-current" />
-                        Iniciar
-                      </button>
+              <div className="space-y-6">
+                <div className="bg-white rounded-[32px] border border-zinc-200 shadow-sm p-6">
+                  <h3 className="text-xl font-black text-zinc-900">Fila de links externos</h3>
+                  <p className="text-sm text-zinc-500 mt-2">Cada link registra presenca nominal e leitura simples da aula.</p>
+                  <div className="space-y-4 mt-6">
+                    {activeShares.length === 0 && (
+                      <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-5 text-sm text-zinc-500">
+                        Nenhum formulario ativo no momento.
+                      </div>
                     )}
-                    {cls.status === 'running' && (
-                      <button 
-                        onClick={() => {
-                          setExecutingClass(cls);
-                          setExecStep(2);
-                        }}
-                        className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-amber-600 transition-colors"
-                      >
-                        Continuar
-                      </button>
-                    )}
-                    {cls.status === 'finished' && (
-                      <button className="flex-1 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold flex items-center justify-center gap-2 cursor-default">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Concluída
-                      </button>
-                    )}
-                    {isAdmin && (
-                      <button className="p-2.5 bg-zinc-50 text-zinc-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    {activeShares.map((share) => {
+                      const session = data.sessions.find((item) => item.id === share.sessionId);
+                      if (!session) return null;
+                      return (
+                        <div key={share.token} className="rounded-3xl bg-zinc-50 border border-zinc-200 p-5 space-y-3">
+                          <div>
+                            <p className="font-black text-zinc-900">{session.sectorName}</p>
+                            <p className="text-sm text-zinc-500">{session.shiftName} · {session.startTime}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-2xl bg-white border border-zinc-200 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-400 mb-1">Respostas</p>
+                              <p className="font-black text-zinc-900">{share.submissions}</p>
+                            </div>
+                            <div className="rounded-2xl bg-white border border-zinc-200 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-400 mb-1">Acessos</p>
+                              <p className="font-black text-zinc-900">{share.opens}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => copyShareLink(share.token)}
+                            className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-100 transition-colors"
+                          >
+                            {copiedToken === share.token ? 'Link copiado' : 'Copiar link'}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
+
+                <div className="bg-white rounded-[32px] border border-zinc-200 shadow-sm p-6">
+                  <h3 className="text-xl font-black text-zinc-900">Checklist operacional</h3>
+                  <div className="space-y-3 mt-5">
+                    {[
+                      `${todaySessions.filter((session) => session.status === 'planned').length} turmas ainda precisam iniciar`,
+                      `${todaySessions.filter((session) => session.externalShareToken).length} turmas com formulario externo pronto`,
+                      `${todaySessions.filter((session) => presentCount(session) === 0).length} turmas sem presenca registrada`,
+                    ].map((item) => (
+                      <div key={item} className="rounded-2xl bg-zinc-50 border border-zinc-200 p-4 text-sm font-medium text-zinc-700">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
 
-        {activeSubTab === 'calendar' && (
-          <motion.div 
-            key="calendar"
-            initial={{ opacity: 0, y: 10 }}
+        {activeSubTab === 'schedule' && (
+          <motion.div
+            key="schedule"
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="bg-white p-8 rounded-3xl border border-zinc-200 shadow-sm"
+            exit={{ opacity: 0, y: -12 }}
+            className="bg-white rounded-[34px] border border-zinc-200 shadow-sm p-8"
           >
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
               <div>
-                <h2 className="text-xl font-bold text-zinc-900">Planejamento Semanal</h2>
-                <p className="text-sm text-zinc-500">Cronograma recorrente de aulas por setor e turno.</p>
+                <h2 className="text-2xl font-black text-zinc-900">Escalas recorrentes</h2>
+                <p className="text-sm text-zinc-500 mt-2">Planejamento semanal da ginastica laboral por setor, turno e profissional.</p>
               </div>
-              <div className="flex items-center gap-3">
-                <button className="px-4 py-2 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors flex items-center gap-2">
-                  <Copy className="w-4 h-4" />
-                  Copiar Semana
-                </button>
-                {isAdmin && (
-                  <button 
-                    onClick={() => {
-                      setEditingSchedule(null);
-                      setShowScheduleModal(true);
-                    }}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Nova Recorrência
-                  </button>
-                )}
-              </div>
+              <button
+                onClick={() => openScheduleEditor()}
+                className="px-4 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-lg shadow-emerald-100"
+              >
+                <Plus size={16} />
+                Nova recorrencia
+              </button>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
-              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day, idx) => {
-                const daySchedules = schedules.filter(s => s.day_of_week === (idx + 1) % 7);
+              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom'].map((label, index) => {
+                const dayOfWeek = (index + 1) % 7;
+                const daySchedules = data.schedules
+                  .filter((schedule) => schedule.dayOfWeek === dayOfWeek)
+                  .sort((left, right) => left.startTime.localeCompare(right.startTime));
+
                 return (
-                  <div key={day} className="space-y-4">
-                    <div className="text-center py-2 bg-zinc-50 rounded-xl text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                      {day}
+                  <div key={label} className="space-y-3">
+                    <div className="rounded-xl bg-zinc-50 border border-zinc-200 py-3 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
+                      {label}
                     </div>
-                    <div className="min-h-[400px] bg-zinc-50/50 rounded-2xl border border-dashed border-zinc-200 p-2 space-y-2">
-                      {daySchedules.map((s) => (
-                        <div 
-                          key={s.id} 
-                          onClick={() => {
-                            if (isAdmin) {
-                              setEditingSchedule(s);
-                              setShowScheduleModal(true);
-                            }
-                          }}
-                          className="p-3 bg-white border border-zinc-200 rounded-xl shadow-sm text-[10px] cursor-pointer hover:border-emerald-500 transition-colors group relative"
-                        >
-                          <div className="font-bold text-zinc-900">{s.start_time} - {s.sector_name}</div>
-                          <div className="text-zinc-500 mt-0.5">{s.shift_name} • {s.duration_minutes} min</div>
-                          {isAdmin && (
-                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <MoreVertical className="w-3 h-3 text-zinc-400" />
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                    <div className="min-h-[340px] rounded-[28px] bg-zinc-50/70 border border-dashed border-zinc-200 p-3 space-y-3">
                       {daySchedules.length === 0 && (
-                        <div className="h-full flex items-center justify-center text-[10px] text-zinc-400 text-center px-4">
-                          Sem aulas
+                        <div className="h-full flex items-center justify-center text-center text-xs text-zinc-400 px-3">
+                          Sem recorrencia cadastrada
                         </div>
                       )}
+                      {daySchedules.map((schedule) => (
+                        <button
+                          key={schedule.id}
+                          onClick={() => openScheduleEditor(schedule)}
+                          className="w-full text-left rounded-3xl bg-white border border-zinc-200 shadow-sm p-4 hover:border-emerald-300 transition-colors"
+                        >
+                          <p className="text-sm font-black text-zinc-900">{schedule.startTime}</p>
+                          <p className="text-sm text-zinc-700 mt-1">{schedule.sectorName}</p>
+                          <p className="text-xs text-zinc-500 mt-1">{schedule.shiftName}</p>
+                          <p className="text-[11px] text-zinc-400 mt-3">
+                            {schedule.durationMinutes} min · base {schedule.expectedCount}
+                          </p>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 );
@@ -279,454 +681,658 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
           </motion.div>
         )}
 
-        {activeSubTab === 'reports' && summary && (
-          <motion.div 
+        {activeSubTab === 'reports' && (
+          <motion.div
             key="reports"
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: -12 }}
             className="space-y-6"
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
-                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Participação Média</div>
-                <div className="text-2xl font-bold text-zinc-900">84.2%</div>
-                <div className="text-[10px] text-emerald-600 font-bold mt-1">+2.4% vs mês ant.</div>
-              </div>
-              <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
-                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Check-ins Realizados</div>
-                <div className="text-2xl font-bold text-zinc-900">1,245</div>
-                <div className="text-[10px] text-zinc-400 font-bold mt-1">Meta: 1,500</div>
-              </div>
-              <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
-                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Aulas Canceladas</div>
-                <div className="text-2xl font-bold text-rose-600">12</div>
-                <div className="text-[10px] text-zinc-400 font-bold mt-1">Motivo: Feriado/Parada</div>
-              </div>
-              <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
-                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Setores Atendidos</div>
-                <div className="text-2xl font-bold text-zinc-900">18/20</div>
-                <div className="text-[10px] text-amber-600 font-bold mt-1">2 pendentes</div>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+              <MetricCard
+                title="Aderencia mensal"
+                value={`${latestSnapshot?.rate ?? averageAttendanceToday}%`}
+                hint="Participacao consolidada do periodo"
+                icon={<BarChart3 size={20} />}
+              />
+              <MetricCard
+                title="Satisfacao media"
+                value={latestSnapshot ? latestSnapshot.satisfaction.toFixed(1) : averageFeedbackToday.toString()}
+                hint="Media do feedback coletado"
+                icon={<Star size={20} />}
+              />
+              <MetricCard
+                title="Turmas executadas"
+                value={`${latestSnapshot?.completed ?? 0}/${latestSnapshot?.planned ?? 0}`}
+                hint="Comparativo entre planejado e realizado"
+                icon={<CheckCircle2 size={20} />}
+              />
+              <MetricCard
+                title="Formularios no mes"
+                value={`${latestSnapshot?.externalForms ?? activeShares.length}`}
+                hint="Uso de coleta externa na rotina"
+                icon={<MessageSquare size={20} />}
+              />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-emerald-500" />
-                    Participação Mensal (%)
-                  </h3>
-                  <button className="p-2 text-zinc-400 hover:text-zinc-900 transition-colors">
-                    <Download className="w-4 h-4" />
-                  </button>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="bg-white rounded-[34px] border border-zinc-200 shadow-sm p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                    <BarChart3 size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-zinc-900">Aderencia mensal</h3>
+                    <p className="text-sm text-zinc-500">Historico de participacao da ginastica laboral.</p>
+                  </div>
                 </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={summary.participationByMonth}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <LineChart data={data.monthlySnapshots}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
                       <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717a' }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717a' }} domain={[0, 100]} />
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                      />
-                      <Line type="monotone" dataKey="rate" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981' }} activeDot={{ r: 6 }} />
+                      <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717a' }} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="rate" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981' }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-500" />
-                    Ranking Abaixo da Meta (80%)
-                  </h3>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Mês Atual</span>
+              <div className="bg-white rounded-[34px] border border-zinc-200 shadow-sm p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-700 flex items-center justify-center">
+                    <CalendarDays size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-zinc-900">Uso de formulario externo</h3>
+                    <p className="text-sm text-zinc-500">Quantidade de turmas com envio de link por mes.</p>
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  {summary.rankingBelowGoal.map((item: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center font-bold text-xs">
-                          {i + 1}
-                        </div>
-                        <span className="font-bold text-zinc-900">{item.sector}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-32 h-2 bg-zinc-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-rose-500" style={{ width: `${item.rate}%` }} />
-                        </div>
-                        <span className="text-sm font-bold text-rose-600">{item.rate}%</span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data.monthlySnapshots}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717a' }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#71717a' }} />
+                      <Tooltip />
+                      <Bar dataKey="externalForms" fill="#18181b" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-3xl border border-zinc-200 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
-                <h3 className="font-bold text-zinc-900">Detalhamento por Setor</h3>
-                <button className="text-xs font-bold text-emerald-600 hover:underline">Ver todos</button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-zinc-50/50">
-                      <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Setor</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Planejadas</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Realizadas</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Participação</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100">
-                    {[
-                      { sector: 'Montagem Cross', planned: 44, actual: 42, rate: 95, status: 'ok' },
-                      { sector: 'Logística', planned: 22, actual: 18, rate: 72, status: 'warning' },
-                      { sector: 'Pintura', planned: 22, actual: 22, rate: 100, status: 'ok' },
-                    ].map((row, i) => (
-                      <tr key={i} className="hover:bg-zinc-50/50 transition-colors">
-                        <td className="px-6 py-4 text-sm font-bold text-zinc-900">{row.sector}</td>
-                        <td className="px-6 py-4 text-sm text-zinc-600">{row.planned}</td>
-                        <td className="px-6 py-4 text-sm text-zinc-600">{row.actual}</td>
-                        <td className="px-6 py-4">
-                          <span className={`text-sm font-bold ${row.rate < 80 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {row.rate}%
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
-                            row.status === 'ok' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
-                          }`}>
-                            {row.status === 'ok' ? 'Meta Atingida' : 'Abaixo da Meta'}
-                          </span>
-                        </td>
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_360px] gap-6">
+              <div className="bg-white rounded-[34px] border border-zinc-200 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-zinc-100">
+                  <h3 className="text-xl font-black text-zinc-900">Desempenho por setor</h3>
+                  <p className="text-sm text-zinc-500 mt-2">Leitura rapida de presenca, execucao e feedback.</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-zinc-50">
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Setor</th>
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Planejadas</th>
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Executadas</th>
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Aderencia</th>
+                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Feedback</th>
                       </tr>
+                    </thead>
+                    <tbody>
+                      {sectorRows.map((row) => (
+                        <tr key={row.sector} className="border-t border-zinc-100">
+                          <td className="px-6 py-4 text-sm font-bold text-zinc-900">{row.sector}</td>
+                          <td className="px-6 py-4 text-sm text-zinc-600">{row.planned}</td>
+                          <td className="px-6 py-4 text-sm text-zinc-600">{row.active}</td>
+                          <td className="px-6 py-4">
+                            <span className={`text-sm font-bold ${row.rate >= 80 ? 'text-emerald-700' : 'text-amber-600'}`}>
+                              {row.rate}%
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-zinc-600">{row.feedback ?? '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="bg-white rounded-[34px] border border-zinc-200 shadow-sm p-6">
+                  <h3 className="text-xl font-black text-zinc-900">Leitura dos participantes</h3>
+                  <div className="space-y-4 mt-5">
+                    {feedbackNotes.length === 0 && (
+                      <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-5 text-sm text-zinc-500">
+                        Ainda nao ha comentarios textuais neste mes.
+                      </div>
+                    )}
+                    {feedbackNotes.slice(0, 4).map((note) => (
+                      <div key={`${note.sessionId}-${note.name}`} className="rounded-3xl bg-zinc-50 border border-zinc-200 p-5">
+                        <p className="text-sm font-black text-zinc-900">{note.name}</p>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-400 mt-1">{note.sector}</p>
+                        <p className="text-sm text-zinc-600 mt-3">{note.comment}</p>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-[34px] border border-zinc-200 shadow-sm p-6">
+                  <h3 className="text-xl font-black text-zinc-900">Radar de risco operacional</h3>
+                  <div className="space-y-3 mt-5">
+                    {[
+                      `${sectorRows.filter((row) => row.rate < 80).length} setores abaixo da meta de 80%`,
+                      `${monthlySessions.filter((session) => !session.externalShareToken).length} turmas sem link externo neste mes`,
+                      `${monthlySessions.filter((session) => session.status === 'planned').length} registros ainda em aberto`,
+                    ].map((line) => (
+                      <div key={line} className="rounded-2xl bg-zinc-50 border border-zinc-200 p-4 text-sm font-medium text-zinc-700">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Execution Modal */}
       <AnimatePresence>
-        {executingClass && (
-          <motion.div 
+        {sessionDraft && (
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-zinc-950/75 backdrop-blur-sm p-4 overflow-y-auto"
           >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            <motion.div
+              initial={{ opacity: 0, y: 18, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18, scale: 0.98 }}
+              className="max-w-6xl mx-auto bg-white rounded-[40px] border border-zinc-200 shadow-2xl overflow-hidden"
             >
-              {/* Modal Header */}
-              <div className="p-8 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200">
-                    <Play className="w-6 h-6 fill-current" />
+              <div className="px-8 py-6 border-b border-zinc-100 flex items-start justify-between gap-4 bg-zinc-50/70">
+                <div>
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] ${sessionStatusClass(sessionDraft.status)}`}>
+                      {sessionStatusLabel(sessionDraft.status)}
+                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">{sessionDraft.date}</span>
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-zinc-900">Modo Execução</h2>
-                    <p className="text-zinc-500 text-sm">{executingClass.sector_name} • {executingClass.shift_name}</p>
-                  </div>
+                  <h2 className="text-3xl font-black text-zinc-900">{sessionDraft.sectorName}</h2>
+                  <p className="text-sm text-zinc-500 mt-2">
+                    Presenca nominal, sequencia de exercicios e formulario externo da turma.
+                  </p>
                 </div>
-                <button 
-                  onClick={() => setExecutingClass(null)}
-                  className="p-3 hover:bg-zinc-100 rounded-2xl transition-colors text-zinc-400"
+                <button
+                  onClick={() => setSessionDraft(null)}
+                  className="w-12 h-12 rounded-2xl bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900 transition-colors flex items-center justify-center"
                 >
-                  <X className="w-6 h-6" />
+                  <X size={22} />
                 </button>
               </div>
 
-              {/* Modal Body */}
-              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                {/* Steps Indicator */}
-                <div className="flex items-center justify-center gap-4 mb-12">
-                  {[1, 2, 3].map((s) => (
-                    <React.Fragment key={s}>
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
-                        execStep === s ? 'bg-emerald-600 text-white scale-110 shadow-lg shadow-emerald-200' : 
-                        execStep > s ? 'bg-emerald-100 text-emerald-600' : 'bg-zinc-100 text-zinc-400'
-                      }`}>
-                        {execStep > s ? <CheckCircle2 className="w-5 h-5" /> : s}
+              <div className="p-8 grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] gap-8">
+                <div className="space-y-6">
+                  <div className="rounded-[30px] bg-zinc-50 border border-zinc-200 p-6 space-y-4">
+                    <h3 className="text-xl font-black text-zinc-900">Dados da turma</h3>
+                    <label className="block space-y-2">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Unidade</span>
+                      <input
+                        value={sessionDraft.unitName}
+                        onChange={(event) => setSessionDraft((current) => current ? { ...current, unitName: event.target.value } : current)}
+                        className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Setor</span>
+                      <input
+                        value={sessionDraft.sectorName}
+                        onChange={(event) => setSessionDraft((current) => current ? { ...current, sectorName: event.target.value } : current)}
+                        className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Turno</span>
+                      <input
+                        value={sessionDraft.shiftName}
+                        onChange={(event) => setSessionDraft((current) => current ? { ...current, shiftName: event.target.value } : current)}
+                        className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                      />
+                    </label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <label className="block space-y-2">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Horario</span>
+                        <input
+                          type="time"
+                          value={sessionDraft.startTime}
+                          onChange={(event) => setSessionDraft((current) => current ? { ...current, startTime: event.target.value } : current)}
+                          className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                        />
+                      </label>
+                      <label className="block space-y-2">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Duracao</span>
+                        <input
+                          type="number"
+                          min={5}
+                          value={sessionDraft.durationMinutes}
+                          onChange={(event) => setSessionDraft((current) => current ? { ...current, durationMinutes: Number(event.target.value) || 5 } : current)}
+                          className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                        />
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <label className="block space-y-2">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Base esperada</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={sessionDraft.expectedCount}
+                          onChange={(event) => setSessionDraft((current) => current ? { ...current, expectedCount: Number(event.target.value) || 1 } : current)}
+                          className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                        />
+                      </label>
+                      <label className="block space-y-2">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Profissional</span>
+                        <input
+                          value={sessionDraft.instructorName}
+                          onChange={(event) => setSessionDraft((current) => current ? { ...current, instructorName: event.target.value } : current)}
+                          className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                        />
+                      </label>
+                    </div>
+                    <label className="block space-y-2">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Observacoes da aula</span>
+                      <textarea
+                        value={sessionDraft.notes}
+                        onChange={(event) => setSessionDraft((current) => current ? { ...current, notes: event.target.value } : current)}
+                        className="w-full min-h-[120px] rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500 resize-none"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="rounded-[30px] bg-zinc-50 border border-zinc-200 p-6 space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-xl font-black text-zinc-900">Formulario externo</h3>
+                        <p className="text-sm text-zinc-500 mt-1">Envio para contabilizar presenca e impressao da turma.</p>
                       </div>
-                      {s < 3 && <div className={`w-12 h-0.5 rounded-full ${execStep > s ? 'bg-emerald-600' : 'bg-zinc-100'}`} />}
-                    </React.Fragment>
-                  ))}
+                      {sessionDraft.externalShareToken ? (
+                        <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-[0.18em]">
+                          ativo
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full bg-zinc-200 text-zinc-600 text-[10px] font-bold uppercase tracking-[0.18em]">
+                          pendente
+                        </span>
+                      )}
+                    </div>
+
+                    {sessionDraft.externalShareToken ? (
+                      <>
+                        <div className="rounded-2xl bg-white border border-zinc-200 p-4">
+                          <p className="text-xs font-mono text-zinc-600 break-all">{buildShareUrl(sessionDraft.externalShareToken)}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            onClick={() => copyShareLink(sessionDraft.externalShareToken as string)}
+                            className="px-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-100 transition-colors"
+                          >
+                            {copiedToken === sessionDraft.externalShareToken ? 'Link copiado' : 'Copiar link'}
+                          </button>
+                          <button
+                            onClick={() => window.open(buildShareUrl(sessionDraft.externalShareToken as string), '_blank', 'noopener,noreferrer')}
+                            className="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-sm font-bold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                          >
+                            Abrir
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleCreateShare(sessionDraft.id)}
+                        className="w-full px-4 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100"
+                      >
+                        Gerar formulario externo
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <button
+                      onClick={() => handlePersistSession('planned')}
+                      className="px-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Save size={16} />
+                      Salvar
+                    </button>
+                    <button
+                      onClick={() => handlePersistSession('running')}
+                      className="px-4 py-3 bg-amber-500 text-white rounded-2xl text-sm font-bold hover:bg-amber-600 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Play size={16} />
+                      Em andamento
+                    </button>
+                    <button
+                      onClick={() => handlePersistSession('finished')}
+                      className="px-4 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle2 size={16} />
+                      Concluir
+                    </button>
+                  </div>
                 </div>
 
-                {execStep === 1 && (
-                  <motion.div 
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="max-w-md mx-auto space-y-8 text-center"
-                  >
-                    <div className="space-y-2">
-                      <h3 className="text-2xl font-bold text-zinc-900">Confirmar Aula</h3>
-                      <p className="text-zinc-500">Verifique os detalhes antes de começar o check-in.</p>
-                    </div>
-                    <div className="bg-zinc-50 p-6 rounded-3xl border border-zinc-100 text-left space-y-4">
-                      <div className="flex justify-between py-2 border-b border-zinc-200/50">
-                        <span className="text-zinc-500 text-sm">Unidade</span>
-                        <span className="font-bold text-zinc-900">{executingClass.unit_name}</span>
+                <div className="space-y-6">
+                  <div className="rounded-[30px] bg-zinc-50 border border-zinc-200 p-6">
+                    <div className="flex items-center justify-between gap-3 mb-5">
+                      <div>
+                        <h3 className="text-xl font-black text-zinc-900">Sequencia da ginastica</h3>
+                        <p className="text-sm text-zinc-500 mt-1">Monte a aula com os exercicios realmente aplicados.</p>
                       </div>
-                      <div className="flex justify-between py-2 border-b border-zinc-200/50">
-                        <span className="text-zinc-500 text-sm">Setor</span>
-                        <span className="font-bold text-zinc-900">{executingClass.sector_name}</span>
-                      </div>
-                      <div className="flex justify-between py-2 border-b border-zinc-200/50">
-                        <span className="text-zinc-500 text-sm">Turno</span>
-                        <span className="font-bold text-zinc-900">{executingClass.shift_name}</span>
-                      </div>
-                      <div className="flex justify-between py-2">
-                        <span className="text-zinc-500 text-sm">Duração</span>
-                        <span className="font-bold text-zinc-900">{executingClass.duration_minutes} min</span>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => setExecStep(2)}
-                      className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all active:scale-[0.98]"
-                    >
-                      Começar Check-in
-                    </button>
-                  </motion.div>
-                )}
-
-                {execStep === 2 && (
-                  <motion.div 
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="space-y-8"
-                  >
-                    <div className="text-center space-y-2">
-                      <h3 className="text-2xl font-bold text-zinc-900">Registro de Presença</h3>
-                      <p className="text-zinc-500">Escolha o método mais rápido para este momento.</p>
+                      <button
+                        onClick={() => setSessionDraft((current) => current ? {
+                          ...current,
+                          exercises: [...current.exercises, { id: createLocalId('exercise'), name: '', focus: '', durationMinutes: 2, completed: false }],
+                        } : current)}
+                        className="px-3 py-2 bg-white border border-zinc-200 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-100 transition-colors"
+                      >
+                        Adicionar
+                      </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {[
-                        { id: 'count', label: 'Contagem Rápida', icon: <Hash className="w-6 h-6" /> },
-                        { id: 'qr', label: 'QR Code', icon: <QrCode className="w-6 h-6" /> },
-                        { id: 'list', label: 'Lista de Nomes', icon: <ListChecks className="w-6 h-6" /> },
-                      ].map((method) => (
-                        <button 
-                          key={method.id}
-                          onClick={() => setAttendanceMethod(method.id as any)}
-                          className={`p-6 rounded-3xl border-2 transition-all text-center space-y-3 ${
-                            attendanceMethod === method.id ? 'border-emerald-600 bg-emerald-50/50' : 'border-zinc-100 hover:border-emerald-200'
-                          }`}
-                        >
-                          <div className={`w-12 h-12 mx-auto rounded-2xl flex items-center justify-center ${
-                            attendanceMethod === method.id ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-zinc-100 text-zinc-500'
-                          }`}>
-                            {method.icon}
+                    <div className="space-y-4">
+                      {sessionDraft.exercises.map((exercise) => (
+                        <div key={exercise.id} className="rounded-3xl bg-white border border-zinc-200 p-4">
+                          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_190px_110px_44px] gap-3">
+                            <input
+                              value={exercise.name}
+                              onChange={(event) => setSessionDraft((current) => current ? {
+                                ...current,
+                                exercises: current.exercises.map((item) => item.id === exercise.id ? { ...item, name: event.target.value } : item),
+                              } : current)}
+                              placeholder="Nome do exercicio"
+                              className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                            />
+                            <input
+                              value={exercise.focus}
+                              onChange={(event) => setSessionDraft((current) => current ? {
+                                ...current,
+                                exercises: current.exercises.map((item) => item.id === exercise.id ? { ...item, focus: event.target.value } : item),
+                              } : current)}
+                              placeholder="Foco"
+                              className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                            />
+                            <input
+                              type="number"
+                              min={1}
+                              value={exercise.durationMinutes}
+                              onChange={(event) => setSessionDraft((current) => current ? {
+                                ...current,
+                                exercises: current.exercises.map((item) => item.id === exercise.id ? { ...item, durationMinutes: Number(event.target.value) || 1 } : item),
+                              } : current)}
+                              className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                            />
+                            <button
+                              onClick={() => setSessionDraft((current) => current ? {
+                                ...current,
+                                exercises: current.exercises.filter((item) => item.id !== exercise.id),
+                              } : current)}
+                              className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors flex items-center justify-center"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
-                          <span className={`block font-bold text-sm ${attendanceMethod === method.id ? 'text-emerald-900' : 'text-zinc-600'}`}>
-                            {method.label}
-                          </span>
-                        </button>
+                          <button
+                            onClick={() => setSessionDraft((current) => current ? {
+                              ...current,
+                              exercises: current.exercises.map((item) => item.id === exercise.id ? { ...item, completed: !item.completed } : item),
+                            } : current)}
+                            className={`mt-3 px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
+                              exercise.completed ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500'
+                            }`}
+                          >
+                            {exercise.completed ? 'Marcado como aplicado' : 'Marcar como aplicado'}
+                          </button>
+                        </div>
                       ))}
                     </div>
+                  </div>
 
-                    {attendanceMethod === 'count' && (
-                      <div className="max-w-md mx-auto bg-white p-8 rounded-[32px] border border-zinc-200 shadow-xl shadow-zinc-100 space-y-8">
-                        <div className="grid grid-cols-2 gap-8">
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Previstos</label>
-                            <input 
-                              type="number" 
-                              value={counts.expected}
-                              onChange={(e) => setCounts({ ...counts, expected: parseInt(e.target.value) || 0 })}
-                              className="w-full text-3xl font-bold text-zinc-900 bg-zinc-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-emerald-500/20"
+                  <div className="rounded-[30px] bg-zinc-50 border border-zinc-200 p-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
+                      <div>
+                        <h3 className="text-xl font-black text-zinc-900">Lista nominal</h3>
+                        <p className="text-sm text-zinc-500 mt-1">Edite nomes, matriculas e confirme quem participou da aula.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-white border border-zinc-200 px-4 py-3 text-sm">
+                          <span className="font-black text-zinc-900">{presentCount(sessionDraft)}</span>
+                          <span className="text-zinc-500"> / {sessionDraft.expectedCount} presentes</span>
+                        </div>
+                        <button
+                          onClick={() => setSessionDraft((current) => current ? {
+                            ...current,
+                            participants: [...current.participants, { id: createLocalId('participant'), name: '', badge: '', role: '', present: false, source: 'internal' }],
+                          } : current)}
+                          className="px-3 py-2 bg-white border border-zinc-200 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-100 transition-colors"
+                        >
+                          Adicionar nome
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-3 max-h-[560px] overflow-y-auto pr-1 custom-scrollbar">
+                      {sessionDraft.participants.map((participant) => (
+                        <div key={participant.id} className="rounded-3xl bg-white border border-zinc-200 p-4">
+                          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px_170px_120px_44px] gap-3">
+                            <input
+                              value={participant.name}
+                              onChange={(event) => setSessionDraft((current) => current ? {
+                                ...current,
+                                participants: current.participants.map((item) => item.id === participant.id ? { ...item, name: event.target.value } : item),
+                              } : current)}
+                              placeholder="Nome"
+                              className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
                             />
+                            <input
+                              value={participant.badge}
+                              onChange={(event) => setSessionDraft((current) => current ? {
+                                ...current,
+                                participants: current.participants.map((item) => item.id === participant.id ? { ...item, badge: event.target.value } : item),
+                              } : current)}
+                              placeholder="Matricula"
+                              className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                            />
+                            <input
+                              value={participant.role}
+                              onChange={(event) => setSessionDraft((current) => current ? {
+                                ...current,
+                                participants: current.participants.map((item) => item.id === participant.id ? { ...item, role: event.target.value } : item),
+                              } : current)}
+                              placeholder="Funcao"
+                              className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                            />
+                            <button
+                              onClick={() => setSessionDraft((current) => current ? {
+                                ...current,
+                                participants: current.participants.map((item) =>
+                                  item.id === participant.id
+                                    ? { ...item, present: !item.present, lastCheckInAt: !item.present ? new Date().toISOString() : item.lastCheckInAt }
+                                    : item,
+                                ),
+                              } : current)}
+                              className={`rounded-2xl px-4 py-3 text-sm font-bold transition-colors ${
+                                participant.present ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
+                              }`}
+                            >
+                              {participant.present ? 'Presente' : 'Marcar'}
+                            </button>
+                            <button
+                              onClick={() => setSessionDraft((current) => current ? {
+                                ...current,
+                                participants: current.participants.filter((item) => item.id !== participant.id),
+                              } : current)}
+                              className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors flex items-center justify-center"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Presentes</label>
-                            <div className="text-4xl font-black text-emerald-600 bg-emerald-50 rounded-2xl p-4 text-center">
-                              {counts.present}
+
+                          {(participant.feedbackScore || participant.feedbackComment || participant.favoriteExercise) && (
+                            <div className="mt-3 rounded-2xl bg-zinc-50 border border-zinc-200 p-3 text-sm text-zinc-600">
+                              <p>
+                                <strong className="text-zinc-900">Feedback:</strong>{' '}
+                                nota {participant.feedbackScore ?? '-'}
+                                {participant.favoriteExercise ? ` · exercicio ${participant.favoriteExercise}` : ''}
+                              </p>
+                              {participant.feedbackComment && <p className="mt-1">{participant.feedbackComment}</p>}
                             </div>
-                          </div>
+                          )}
                         </div>
-
-                        <div className="grid grid-cols-3 gap-3">
-                          <button 
-                            onClick={() => setCounts({ ...counts, present: Math.max(0, counts.present - 1) })}
-                            className="py-4 bg-zinc-100 text-zinc-600 rounded-2xl font-bold hover:bg-zinc-200 transition-colors"
-                          >
-                            -1
-                          </button>
-                          <button 
-                            onClick={() => setCounts({ ...counts, present: counts.present + 1 })}
-                            className="py-4 bg-emerald-100 text-emerald-600 rounded-2xl font-bold hover:bg-emerald-200 transition-colors"
-                          >
-                            +1
-                          </button>
-                          <button 
-                            onClick={() => setCounts({ ...counts, present: counts.present + 5 })}
-                            className="py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100"
-                          >
-                            +5
-                          </button>
-                        </div>
-
-                        <button 
-                          onClick={handleSaveAttendance}
-                          className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold text-lg hover:bg-zinc-800 transition-all flex items-center justify-center gap-2"
-                        >
-                          <Save className="w-5 h-5" />
-                          Salvar Presença
-                        </button>
-                      </div>
-                    )}
-
-                    {attendanceMethod !== 'count' && (
-                      <div className="p-12 text-center bg-zinc-50 rounded-[32px] border border-dashed border-zinc-200">
-                        <div className="w-20 h-20 bg-zinc-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <AlertTriangle className="w-10 h-10 text-zinc-400" />
-                        </div>
-                        <h4 className="text-lg font-bold text-zinc-900">Método em Desenvolvimento</h4>
-                        <p className="text-zinc-500 text-sm mt-2">Por enquanto, utilize a Contagem Rápida para agilizar o processo.</p>
-                        <button 
-                          onClick={() => setAttendanceMethod('count')}
-                          className="mt-6 text-emerald-600 font-bold hover:underline"
-                        >
-                          Voltar para Contagem
-                        </button>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-
-                {execStep === 3 && (
-                  <motion.div 
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="max-w-md mx-auto space-y-8"
-                  >
-                    <div className="text-center space-y-2">
-                      <h3 className="text-2xl font-bold text-zinc-900">Finalizar Aula</h3>
-                      <p className="text-zinc-500">Adicione observações e evidências se necessário.</p>
+                      ))}
                     </div>
-
-                    <div className="space-y-6">
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-zinc-700">Observações</label>
-                        <textarea 
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          placeholder="Ex: Grupo muito participativo, foco em alongamento de punhos..."
-                          className="w-full h-32 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-zinc-700">Foto Evidência (Opcional)</label>
-                        <div className="grid grid-cols-2 gap-4">
-                          <button className="aspect-square bg-zinc-50 border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center gap-2 text-zinc-400 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 transition-all group">
-                            <Camera className="w-8 h-8 group-hover:scale-110 transition-transform" />
-                            <span className="text-[10px] font-bold uppercase">Tirar Foto</span>
-                          </button>
-                          <div className="aspect-square bg-zinc-100 rounded-2xl flex items-center justify-center text-zinc-300">
-                            <CheckCircle2 className="w-12 h-12" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button 
-                      onClick={handleFinishClass}
-                      className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-bold text-xl hover:bg-emerald-700 shadow-2xl shadow-emerald-100 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
-                    >
-                      <CheckCircle2 className="w-6 h-6" />
-                      CONCLUIR AULA
-                    </button>
-                  </motion.div>
-                )}
+                  </div>
+                </div>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Schedule Modal */}
       <AnimatePresence>
-        {showScheduleModal && (
-          <motion.div 
+        {scheduleDraft && (
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-zinc-950/75 backdrop-blur-sm p-4 flex items-center justify-center"
           >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden flex flex-col"
+            <motion.div
+              initial={{ opacity: 0, y: 18, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18, scale: 0.98 }}
+              className="w-full max-w-2xl bg-white rounded-[40px] border border-zinc-200 shadow-2xl overflow-hidden"
             >
-              <div className="p-8 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-                <h2 className="text-2xl font-bold text-zinc-900">
-                  {editingSchedule ? 'Editar Aula' : 'Nova Recorrência'}
-                </h2>
-                <button 
-                  onClick={() => setShowScheduleModal(false)}
-                  className="p-3 hover:bg-zinc-100 rounded-2xl transition-colors text-zinc-400"
+              <div className="px-8 py-6 border-b border-zinc-100 flex items-start justify-between gap-4 bg-zinc-50/70">
+                <div>
+                  <h2 className="text-3xl font-black text-zinc-900">Recorrencia da ginastica</h2>
+                  <p className="text-sm text-zinc-500 mt-2">Defina setor, turno, horario e base prevista para o calendario.</p>
+                </div>
+                <button
+                  onClick={() => setScheduleDraft(null)}
+                  className="w-12 h-12 rounded-2xl bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900 transition-colors flex items-center justify-center"
                 >
-                  <X className="w-6 h-6" />
+                  <X size={22} />
                 </button>
               </div>
-              <div className="p-8 space-y-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-700">Setor</label>
-                  <select className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
-                    <option>Selecione o setor...</option>
-                    <option>Montagem Cross</option>
-                    <option>Logística</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-700">Dia da Semana</label>
-                    <select className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
-                      <option value="1">Segunda</option>
-                      <option value="2">Terça</option>
-                      <option value="3">Quarta</option>
-                      <option value="4">Quinta</option>
-                      <option value="5">Sexta</option>
+
+              <div className="p-8 space-y-5">
+                <label className="block space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Unidade</span>
+                  <input
+                    value={scheduleDraft.unitName}
+                    onChange={(event) => setScheduleDraft((current) => current ? { ...current, unitName: event.target.value } : current)}
+                    className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                  />
+                </label>
+                <label className="block space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Setor</span>
+                  <input
+                    value={scheduleDraft.sectorName}
+                    onChange={(event) => setScheduleDraft((current) => current ? { ...current, sectorName: event.target.value } : current)}
+                    className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                  />
+                </label>
+                <label className="block space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Turno</span>
+                  <input
+                    value={scheduleDraft.shiftName}
+                    onChange={(event) => setScheduleDraft((current) => current ? { ...current, shiftName: event.target.value } : current)}
+                    className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                  />
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Dia da semana</span>
+                    <select
+                      value={scheduleDraft.dayOfWeek}
+                      onChange={(event) => setScheduleDraft((current) => current ? { ...current, dayOfWeek: Number(event.target.value) } : current)}
+                      className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                    >
+                      {DAY_LABELS.map((label, index) => (
+                        <option key={label} value={index}>
+                          {label}
+                        </option>
+                      ))}
                     </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-700">Horário</label>
-                    <input type="time" className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
-                  </div>
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Horario</span>
+                    <input
+                      type="time"
+                      value={scheduleDraft.startTime}
+                      onChange={(event) => setScheduleDraft((current) => current ? { ...current, startTime: event.target.value } : current)}
+                      className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                    />
+                  </label>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-700">Duração (minutos)</label>
-                  <div className="flex gap-2">
-                    {[5, 10, 15].map(d => (
-                      <button key={d} className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm ${d === 15 ? 'border-emerald-600 bg-emerald-50 text-emerald-600' : 'border-zinc-100 text-zinc-400'}`}>
-                        {d} min
-                      </button>
-                    ))}
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Duracao</span>
+                    <input
+                      type="number"
+                      min={5}
+                      value={scheduleDraft.durationMinutes}
+                      onChange={(event) => setScheduleDraft((current) => current ? { ...current, durationMinutes: Number(event.target.value) || 5 } : current)}
+                      className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Base prevista</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={scheduleDraft.expectedCount}
+                      onChange={(event) => setScheduleDraft((current) => current ? { ...current, expectedCount: Number(event.target.value) || 1 } : current)}
+                      className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Profissional</span>
+                    <input
+                      value={scheduleDraft.instructorName}
+                      onChange={(event) => setScheduleDraft((current) => current ? { ...current, instructorName: event.target.value } : current)}
+                      className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"
+                    />
+                  </label>
                 </div>
-                <button className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all flex items-center justify-center gap-2">
-                  <Save className="w-5 h-5" />
-                  Salvar Cronograma
-                </button>
-                {editingSchedule && (
-                  <button className="w-full py-3 text-rose-600 font-bold text-sm hover:bg-rose-50 rounded-xl transition-all">
-                    Excluir Recorrência
+
+                <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Template atual</p>
+                  <p className="text-sm font-bold text-zinc-900">{scheduleDraft.exercises.length} exercicios padrao</p>
+                  <p className="text-sm text-zinc-500 mt-2">
+                    Ajustes detalhados da sequencia podem ser feitos quando a turma do dia for aberta na operacao.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={saveScheduleDraft}
+                    className="px-4 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                  >
+                    <Save size={16} />
+                    Salvar recorrencia
                   </button>
-                )}
+                  <button
+                    onClick={deleteScheduleDraft}
+                    className="px-4 py-3 bg-rose-50 text-rose-700 rounded-2xl text-sm font-bold hover:bg-rose-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={16} />
+                    Excluir
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

@@ -16,7 +16,7 @@ export function QuickLaunchModal({ onClose }: QuickLaunchModalProps) {
   const [count, setCount] = useState(0);
 
   const launchTypes = [
-    { id: 'gym', label: 'Aula + Presença', icon: <ClipboardCheck size={20} />, color: 'emerald' },
+    { id: 'gym', label: 'Ginastica Laboral', icon: <ClipboardCheck size={20} />, color: 'emerald' },
     { id: 'momentary', label: 'Queixa Mom.', icon: <AlertCircle size={20} />, color: 'amber' },
     { id: 'ambulatory', label: 'Queixa Amb.', icon: <Stethoscope size={20} />, color: 'red' },
     { id: 'physio', label: 'Fisioterapia', icon: <Activity size={20} />, color: 'blue' },
