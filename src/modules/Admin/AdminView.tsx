@@ -44,9 +44,9 @@ interface AdminViewProps {
 type AlertSeverity = 'critical' | 'attention' | 'info';
 
 const healthLabel: Record<AdminHealth, string> = {
-  healthy: 'Saudavel',
-  attention: 'Atencao',
-  critical: 'Critico',
+  healthy: 'Saudável',
+  attention: 'Atenção',
+  critical: 'Crítico',
   onboarding: 'Onboarding',
 };
 
@@ -58,9 +58,9 @@ const healthClasses: Record<AdminHealth, string> = {
 };
 
 const closingLabel: Record<AdminClosingStatus, string> = {
-  not_started: 'Nao iniciado',
+  not_started: 'Não iniciado',
   open: 'Aberto',
-  review: 'Em revisao',
+  review: 'Em revisão',
   closed: 'Fechado',
 };
 
@@ -309,10 +309,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
           <div>
             <h1 className="text-3xl font-black text-zinc-900 tracking-tight">Painel Admin NR1 Psicossocial</h1>
             <p className="text-zinc-500 font-medium">
-              Visao global do programa: cobertura, adesao, risco psicossocial, plano de acao e relatorio executivo.
+              Visão global do programa: cobertura, adesão, risco psicossocial, plano de ação e relatório executivo.
             </p>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-zinc-400 mt-2">
-              Prototipo funcional persistido em localStorage
+              Protótipo funcional persistido em localStorage
             </p>
           </div>
         </div>
@@ -343,37 +343,37 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
           tone="slate"
         />
         <StatCard
-          title="Adesao media"
+          title="Adesão média"
           value={`${averageAdherence}%`}
           hint={`${responseCoverage}% da base respondida`}
           icon={<TrendingUp size={22} />}
           tone="emerald"
         />
         <StatCard
-          title="Setores criticos"
+          title="Setores críticos"
           value={totalHighRiskSectors.toString()}
           hint="Radar psicossocial consolidado"
           icon={<Radar size={22} />}
           tone="rose"
         />
         <StatCard
-          title="Planos de acao"
+          title="Planos de ação"
           value={totalActionPlansOpen.toString()}
           hint={`${records.reduce((sum, record) => sum + record.actionPlansDelayed, 0)} atrasados`}
           icon={<ClipboardCheck size={22} />}
           tone="amber"
         />
         <StatCard
-          title="Formularios ativos"
+          title="Formulários ativos"
           value={`${formsCoverage}%`}
           hint={`${records.reduce((sum, record) => sum + record.publishedForms, 0)} publicados`}
           icon={<FileText size={22} />}
           tone="blue"
         />
         <StatCard
-          title="Prontidao executiva"
+          title="Prontidão executiva"
           value={executiveReadyContracts.toString()}
-          hint={`${readyReports} relatorios prontos`}
+          hint={`${readyReports} relatórios prontos`}
           icon={<ShieldCheck size={22} />}
           tone="violet"
         />
@@ -418,8 +418,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
         <div className="bg-white rounded-[34px] border border-zinc-200 shadow-sm p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-xl font-black text-zinc-900">Governanca NR1</h2>
-              <p className="text-sm text-zinc-500">Indicadores de operacao do ciclo e cobertura da rotina psicossocial.</p>
+              <h2 className="text-xl font-black text-zinc-900">Governança NR1</h2>
+              <p className="text-sm text-zinc-500">Indicadores de operação do ciclo e cobertura da rotina psicossocial.</p>
             </div>
             <BarChart3 className="text-zinc-400" size={20} />
           </div>
@@ -463,8 +463,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
         <div className="bg-white rounded-[34px] border border-zinc-200 shadow-sm p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-xl font-black text-zinc-900">Prontidao executiva</h2>
-              <p className="text-sm text-zinc-500">Leitura de fechamento e distribuicao dos pacotes de relatorio.</p>
+              <h2 className="text-xl font-black text-zinc-900">Prontidão executiva</h2>
+              <p className="text-sm text-zinc-500">Leitura de fechamento e distribuição dos pacotes de relatório.</p>
             </div>
             <Target className="text-zinc-400" size={20} />
           </div>
@@ -490,14 +490,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
             </div>
 
             <div className="p-5 rounded-3xl bg-violet-50 border border-violet-100">
-              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-violet-600 mb-2">Comite mensal</div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-violet-600 mb-2">Comitê mensal</div>
               <div className="text-3xl font-black text-violet-900">{executiveReadyContracts}</div>
-              <div className="text-sm text-violet-700 mt-1">contratos prontos para apresentacao</div>
+              <div className="text-sm text-violet-700 mt-1">contratos prontos para apresentação</div>
             </div>
 
             <div className="p-5 rounded-3xl bg-zinc-50 border border-zinc-200">
               <div className="flex items-center justify-between text-sm mb-2">
-                <span className="font-black text-zinc-900">Pendencias executivas</span>
+                <span className="font-black text-zinc-900">Pendências executivas</span>
                 <span className="text-zinc-500">{totalPending}</span>
               </div>
               <div className="h-2 bg-zinc-200 rounded-full overflow-hidden">
@@ -512,7 +512,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
                 />
               </div>
               <div className="text-xs text-zinc-500 mt-2">
-                Soma de atestados pendentes, queixas abertas e acoes atrasadas.
+                Soma de atestados pendentes, queixas abertas e ações atrasadas.
               </div>
             </div>
           </div>
@@ -526,7 +526,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
               <div>
                 <h2 className="text-2xl font-black text-zinc-900">Mapa dos contratos</h2>
                 <p className="text-sm text-zinc-500">
-                  Carteira detalhada com maturidade NR1, risco dominante, backlog operacional e prontidao de relatorio.
+                  Carteira detalhada com maturidade NR1, risco dominante, backlog operacional e prontidão de relatório.
                 </p>
               </div>
 
@@ -550,9 +550,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
                     className="bg-transparent text-sm font-bold text-zinc-700 focus:outline-none"
                   >
                     <option value="all">Todos</option>
-                    <option value="healthy">Saudavel</option>
-                    <option value="attention">Atencao</option>
-                    <option value="critical">Critico</option>
+                    <option value="healthy">Saudável</option>
+                    <option value="attention">Atenção</option>
+                    <option value="critical">Crítico</option>
                     <option value="onboarding">Onboarding</option>
                   </select>
                 </div>
@@ -673,8 +673,8 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
           <div className="bg-white rounded-[34px] border border-zinc-200 shadow-sm p-8">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-xl font-black text-zinc-900">Atualizacoes recentes</h2>
-                <p className="text-sm text-zinc-500">Leitura rapida para reuniao de status.</p>
+                <h2 className="text-xl font-black text-zinc-900">Atualizações recentes</h2>
+                <p className="text-sm text-zinc-500">Leitura rápida para reunião de status.</p>
               </div>
               <Clock3 className="text-zinc-400" size={20} />
             </div>
@@ -702,17 +702,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-black text-zinc-900">Checklist executivo</h2>
-                <p className="text-sm text-zinc-500">Pontos minimos para dizer que o contrato esta redondo.</p>
+                <p className="text-sm text-zinc-500">Pontos mínimos para dizer que o contrato está redondo.</p>
               </div>
               <Users className="text-zinc-400" size={20} />
             </div>
 
             <div className="space-y-3">
               {[
-                `${formsCoverage}% da carteira com formularios publicados`,
-                `${cycleCoverage}% da carteira com ciclos em operacao`,
-                `${readyReports} contratos com relatorio pronto`,
-                `${executiveReadyContracts} contratos aptos para comite`,
+                `${formsCoverage}% da carteira com formulários publicados`,
+                `${cycleCoverage}% da carteira com ciclos em operação`,
+                `${readyReports} contratos com relatório pronto`,
+                `${executiveReadyContracts} contratos aptos para comitê`,
               ].map((item) => (
                 <div key={item} className="flex items-center gap-3 p-4 rounded-2xl bg-zinc-50 border border-zinc-200">
                   <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
@@ -796,9 +796,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ tenants, onSelectTenant })
                   onChange={(event) => setDraft({ ...draft, closingStatus: event.target.value as AdminClosingStatus })}
                   className="mt-2 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl font-medium focus:outline-none"
                 >
-                  <option value="not_started">Nao iniciado</option>
+                  <option value="not_started">Não iniciado</option>
                   <option value="open">Aberto</option>
-                  <option value="review">Em revisao</option>
+                  <option value="review">Em revisão</option>
                   <option value="closed">Fechado</option>
                 </select>
               </label>

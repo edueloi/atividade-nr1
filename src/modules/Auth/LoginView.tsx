@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import LogoBranco from "../../../images/LOGO-BRANCO-ATIVIDADE.png";
 import { motion } from "motion/react";
-import { Shield, User, ChevronRight, ArrowRight, Lock, Activity } from "lucide-react";
+import { Shield, User, ChevronRight, ArrowRight, Lock, Activity, HardHat } from "lucide-react";
 
 interface LoginViewProps {
   tenants: any[];
@@ -10,7 +10,7 @@ interface LoginViewProps {
 
 export function LoginView({ tenants, onLogin }: LoginViewProps) {
   const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
-  const [view, setView] = useState<"initial" | "tenant">("initial");
+  const [view, setView] = useState<"initial" | "tenant" | "tenant_tecnico">("initial");
 
   return (
     <div className="min-h-screen bg-white flex flex-col lg:flex-row overflow-hidden">
@@ -99,6 +99,24 @@ export function LoginView({ tenants, onLogin }: LoginViewProps) {
                   </div>
                   <ChevronRight className="text-zinc-300 group-hover:text-emerald-600 transition-colors" />
                 </button>
+
+                <button
+                  onClick={() => setView("tenant_tecnico")}
+                  className="w-full group p-6 bg-white border border-zinc-200 rounded-[32px] flex items-center gap-6 hover:border-blue-600 hover:shadow-xl hover:shadow-blue-100/50 transition-all text-left"
+                >
+                  <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <HardHat className="text-blue-600" size={28} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-zinc-900 text-lg">
+                      Técnico SST
+                    </h3>
+                    <p className="text-zinc-500 text-sm">
+                      Lançamento de dados — absenteísmo, presenças e queixas
+                    </p>
+                  </div>
+                  <ChevronRight className="text-zinc-300 group-hover:text-blue-600 transition-colors" />
+                </button>
               </>
             ) : (
               <motion.div
@@ -114,7 +132,7 @@ export function LoginView({ tenants, onLogin }: LoginViewProps) {
                     <ArrowRight className="rotate-180 w-4 h-4" /> Voltar
                   </button>
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                    Selecionar Contrato
+                    {view === 'tenant_tecnico' ? 'Técnico SST' : 'Profissional'} — Selecionar Contrato
                   </span>
                 </div>
 
@@ -122,14 +140,18 @@ export function LoginView({ tenants, onLogin }: LoginViewProps) {
                   {tenants.map((t) => (
                     <button
                       key={t.id}
-                      onClick={() => onLogin("professional", t.id)}
-                      className="w-full p-5 bg-white border border-zinc-200 rounded-2xl flex items-center justify-between hover:border-emerald-600 hover:bg-emerald-50/30 transition-all group"
+                      onClick={() => onLogin(view === 'tenant_tecnico' ? 'tecnico_sst' : 'professional', t.id)}
+                      className={`w-full p-5 bg-white border border-zinc-200 rounded-2xl flex items-center justify-between transition-all group ${
+                        view === 'tenant_tecnico' 
+                          ? 'hover:border-blue-600 hover:bg-blue-50/30' 
+                          : 'hover:border-emerald-600 hover:bg-emerald-50/30'
+                      }`}
                     >
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-zinc-50 rounded-xl flex items-center justify-center group-hover:bg-white transition-colors">
                           <Activity
                             size={20}
-                            className="text-zinc-400 group-hover:text-emerald-600"
+                            className={`text-zinc-400 ${view === 'tenant_tecnico' ? 'group-hover:text-blue-600' : 'group-hover:text-emerald-600'}`}
                           />
                         </div>
                         <span className="font-bold text-zinc-700 group-hover:text-zinc-900">
@@ -138,7 +160,7 @@ export function LoginView({ tenants, onLogin }: LoginViewProps) {
                       </div>
                       <ChevronRight
                         size={16}
-                        className="text-zinc-300 group-hover:text-emerald-600"
+                        className={`text-zinc-300 ${view === 'tenant_tecnico' ? 'group-hover:text-blue-600' : 'group-hover:text-emerald-600'}`}
                       />
                     </button>
                   ))}

@@ -72,7 +72,7 @@ export default function App() {
   useEffect(() => {
     const loadTenants = async () => {
       try {
-        const result = await fetchTenants();
+        const result: Tenant[] = await fetchTenants();
         setTenants(result);
       } catch (error) {
         console.error('Erro ao carregar contratos:', error);
@@ -90,7 +90,7 @@ export default function App() {
     const tenant = tenants.find(t => t.id === tenantId);
     setUser({
       id: 'user-1',
-      name: role === 'admin_atividade' ? 'Admin Atividade' : 'Ricardo Prof',
+      name: role === 'admin_atividade' ? 'Admin Atividade' : role === 'tecnico_sst' ? 'Carlos Técnico' : 'Ricardo Prof',
       role: role as Role,
       tenantId: tenantId || undefined,
       tenantName: tenant?.name
@@ -102,6 +102,10 @@ export default function App() {
       setSelectedTenant(tenant);
       setActiveTab('home');
     }
+  };
+
+  const handleAddTenant = (newTenant: Tenant) => {
+    setTenants(prev => [...prev, newTenant]);
   };
 
   const handleLogout = () => {
@@ -150,6 +154,19 @@ export default function App() {
         />
 
         <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+          {/* Tenant isolation badge */}
+          {user.role === 'admin_atividade' && selectedTenant && (
+            <div className="mb-6 px-5 py-3 bg-zinc-900 text-white rounded-2xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                <span className="text-sm font-bold">Visualizando dados isolados de: <strong>{selectedTenant.name}</strong></span>
+              </div>
+              <button onClick={handleBackToAdmin} className="text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-white transition-colors">
+                Voltar ao Painel Global
+              </button>
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
             {activeTab === 'home' && <HomeView key="home" />}
             {activeTab === 'dashboard' && <MonthlyDashboardView key="dashboard" />}
@@ -213,6 +230,21 @@ export default function App() {
                 }} 
               />
             )}
+            {activeTab === 'admin_companies' && (
+              <AdminCompaniesView
+                key="admin_companies"
+                tenants={tenants as any}
+                onAddTenant={handleAddTenant}
+                onSelectTenant={(t) => {
+                  setSelectedTenant(t);
+                  setActiveTab('home');
+                }}
+              />
+            )}
+            {activeTab === 'admin_users' && <AdminUsersView key="admin_users" tenants={tenants as any} />}
+            {activeTab === 'admin_forms' && <AdminFormsView key="admin_forms" tenants={tenants as any} />}
+            {activeTab === 'admin_reports' && <AdminReportsView key="admin_reports" tenants={tenants as any} />}
+            {activeTab === 'admin_audit' && <AdminAuditView key="admin_audit" tenants={tenants as any} />}
           </AnimatePresence>
         </main>
       </div>

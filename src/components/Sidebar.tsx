@@ -7,7 +7,7 @@ import {
   ChevronRight, LogOut, Briefcase, Home,
   Rocket, HardHat, UserCheck, FileCheck,
   FileDown, ShieldAlert,
-  Activity
+  Activity, Building2, Users, FileText, BarChart3, ScrollText
 } from 'lucide-react';
 import LogoMenu from '../../images/logo.png';
 import { NavItem } from './NavItem.js';
@@ -25,6 +25,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, userRole, selectedTenant, onLogout, onBackToAdmin }: SidebarProps) {
   const isGlobalPanel = userRole === 'admin_atividade' && !selectedTenant;
+  const isTecnicoSST = userRole === 'tecnico_sst';
 
   return (
     <motion.aside 
@@ -80,7 +81,7 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
         </div>
 
         {/* DASHBOARDS */}
-        {!isGlobalPanel && (
+        {!isGlobalPanel && !isTecnicoSST && (
           <div>
             {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Dashboards</p>}
             <NavItem 
@@ -118,13 +119,15 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
               onClick={() => setActiveTab('gym')} 
               collapsed={collapsed}
             />
-            <NavItem 
-              icon={<Stethoscope size={20} />} 
-              label="Fisioterapia" 
-              active={activeTab === 'physio'} 
-              onClick={() => setActiveTab('physio')} 
-              collapsed={collapsed}
-            />
+            {!isTecnicoSST && (
+              <NavItem 
+                icon={<Stethoscope size={20} />} 
+                label="Fisioterapia" 
+                active={activeTab === 'physio'} 
+                onClick={() => setActiveTab('physio')} 
+                collapsed={collapsed}
+              />
+            )}
             <NavItem 
               icon={<Activity size={20} />} 
               label="Queixas" 
@@ -139,20 +142,24 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
               onClick={() => setActiveTab('absenteeism')} 
               collapsed={collapsed}
             />
-            <NavItem 
-              icon={<BrainCircuit size={20} />} 
-              label="NR1 Psicossocial" 
-              active={activeTab === 'nr1'} 
-              onClick={() => setActiveTab('nr1')} 
-              collapsed={collapsed}
-            />
-            <NavItem 
-              icon={<HardHat size={20} />} 
-              label="Ergonomia / Eng" 
-              active={activeTab === 'ergo'} 
-              onClick={() => setActiveTab('ergo')} 
-              collapsed={collapsed}
-            />
+            {!isTecnicoSST && (
+              <>
+                <NavItem 
+                  icon={<BrainCircuit size={20} />} 
+                  label="NR1 Psicossocial" 
+                  active={activeTab === 'nr1'} 
+                  onClick={() => setActiveTab('nr1')} 
+                  collapsed={collapsed}
+                />
+                <NavItem 
+                  icon={<HardHat size={20} />} 
+                  label="Ergonomia / Eng" 
+                  active={activeTab === 'ergo'} 
+                  onClick={() => setActiveTab('ergo')} 
+                  collapsed={collapsed}
+                />
+              </>
+            )}
             <NavItem 
               icon={<UserCheck size={20} />} 
               label="Admissional" 
@@ -164,7 +171,7 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
         )}
 
         {/* GESTÃO */}
-        {!isGlobalPanel && (
+        {!isGlobalPanel && !isTecnicoSST && (
           <div>
             {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Gestão</p>}
             <NavItem 
@@ -210,12 +217,51 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
           <div>
             {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Admin</p>}
             <NavItem 
-              icon={<Settings size={20} />} 
-              label="Cadastros" 
+              icon={<LayoutDashboard size={20} />} 
+              label="Visão Geral" 
               active={activeTab === 'admin'} 
               onClick={() => setActiveTab('admin')} 
               collapsed={collapsed}
             />
+            {isGlobalPanel && (
+              <>
+                <NavItem 
+                  icon={<Building2 size={20} />} 
+                  label="Empresas" 
+                  active={activeTab === 'admin_companies'} 
+                  onClick={() => setActiveTab('admin_companies')} 
+                  collapsed={collapsed}
+                />
+                <NavItem 
+                  icon={<Users size={20} />} 
+                  label="Usuários & Acessos" 
+                  active={activeTab === 'admin_users'} 
+                  onClick={() => setActiveTab('admin_users')} 
+                  collapsed={collapsed}
+                />
+                <NavItem 
+                  icon={<FileText size={20} />} 
+                  label="Formulários Globais" 
+                  active={activeTab === 'admin_forms'} 
+                  onClick={() => setActiveTab('admin_forms')} 
+                  collapsed={collapsed}
+                />
+                <NavItem 
+                  icon={<BarChart3 size={20} />} 
+                  label="Relatórios" 
+                  active={activeTab === 'admin_reports'} 
+                  onClick={() => setActiveTab('admin_reports')} 
+                  collapsed={collapsed}
+                />
+                <NavItem 
+                  icon={<ScrollText size={20} />} 
+                  label="Auditoria / Logs" 
+                  active={activeTab === 'admin_audit'} 
+                  onClick={() => setActiveTab('admin_audit')} 
+                  collapsed={collapsed}
+                />
+              </>
+            )}
           </div>
         )}
       </div>
