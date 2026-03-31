@@ -5,7 +5,7 @@ import {
   HelpCircle, Zap, FileText, Shield,
   AlertCircle, CheckCircle2, Clock,
   Stethoscope, Activity, ClipboardList,
-  Calendar, QrCode
+  Calendar, QrCode, Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -36,7 +36,7 @@ const tabNames: Record<string, string> = {
   dashboard: 'Dash Mensal',
   strategic: 'Dash Estratégico',
   implementation: 'Dash Implantação',
-  gym: 'Ginastica Laboral',
+  gym: 'Ginástica Laboral',
   physio: 'Fisioterapia',
   complaints: 'Queixas',
   absenteeism: 'Absenteísmo',
@@ -70,6 +70,8 @@ export function Header({
   const [showTenantMenu, setShowTenantMenu] = useState(false);
   const [showAlertsMenu, setShowAlertsMenu] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const isReadOnly = user.role === 'client' || user.role === 'auditor';
+  const canSwitchTenant = !isReadOnly;
 
   const today = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const capitalizedMonth = today.charAt(0).toUpperCase() + today.slice(1);
@@ -89,10 +91,14 @@ export function Header({
   ];
 
   const getModuleSettings = () => {
+    if (isReadOnly) {
+      return [];
+    }
+
     switch (activeTab) {
       case 'complaints': return [{ label: 'Configurar campos e catálogos', icon: <Settings className="w-4 h-4" /> }];
       case 'absenteeism': return [{ label: 'Regras de visibilidade', icon: <Shield className="w-4 h-4" /> }];
-      case 'gym': return [{ label: 'Configurar turma e presenca', icon: <Zap className="w-4 h-4" /> }];
+      case 'gym': return [{ label: 'Configurar turma e presença', icon: <Zap className="w-4 h-4" /> }];
       case 'nr1': return [{ label: 'Configurar privacidade', icon: <Shield className="w-4 h-4" /> }];
       default: return [];
     }
@@ -104,12 +110,19 @@ export function Header({
       <div className="flex items-center gap-4">
         <div className="relative">
           <button 
-            onClick={() => setShowTenantMenu(!showTenantMenu)}
-            className="flex flex-col items-start group"
+            onClick={() => canSwitchTenant && setShowTenantMenu(!showTenantMenu)}
+            className={`flex flex-col items-start ${canSwitchTenant ? 'group' : 'cursor-default'}`}
           >
             <div className="flex items-center gap-1 text-[10px] font-bold text-zinc-400 uppercase tracking-widest group-hover:text-zinc-600 transition-colors">
               {selectedTenant?.name || 'Painel Global'} • Unidade Sorocaba
-              <ChevronDown size={10} className={`transition-transform ${showTenantMenu ? 'rotate-180' : ''}`} />
+              {canSwitchTenant ? (
+                <ChevronDown size={10} className={`transition-transform ${showTenantMenu ? 'rotate-180' : ''}`} />
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black tracking-[0.16em] text-emerald-700">
+                  <Lock size={10} />
+                  SOMENTE LEITURA
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-black tracking-tight text-zinc-900">
@@ -122,7 +135,7 @@ export function Header({
           </button>
 
           <AnimatePresence>
-            {showTenantMenu && (
+            {showTenantMenu && canSwitchTenant && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowTenantMenu(false)} />
                 <motion.div 
@@ -215,7 +228,7 @@ export function Header({
         </div>
 
         {/* Create Hub */}
-        {selectedTenant && (
+        {selectedTenant && !isReadOnly && (
           <div className="relative">
             <button 
               onClick={() => setShowCreateMenu(!showCreateMenu)}
@@ -304,15 +317,17 @@ export function Header({
                         <button className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold text-zinc-600 hover:bg-zinc-50 transition-all">
                           <UserCircle size={16} /> Meu Perfil
                         </button>
-                        <button 
-                          onClick={() => {
-                            setShowTenantMenu(true);
-                            setShowUserMenu(false);
-                          }}
-                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold text-zinc-600 hover:bg-zinc-50 transition-all"
-                        >
-                          <Globe size={16} /> Trocar Contrato
-                        </button>
+                        {canSwitchTenant && (
+                          <button 
+                            onClick={() => {
+                              setShowTenantMenu(true);
+                              setShowUserMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold text-zinc-600 hover:bg-zinc-50 transition-all"
+                          >
+                            <Globe size={16} /> Trocar Contrato
+                          </button>
+                        )}
                         <button className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold text-zinc-600 hover:bg-zinc-50 transition-all">
                           <Settings size={16} /> Preferências
                         </button>

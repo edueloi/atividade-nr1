@@ -119,7 +119,7 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
             {!collapsed && <p className="px-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Lançamentos</p>}
             <NavItem 
               icon={<ClipboardCheck size={20} />} 
-              label="Ginastica Laboral" 
+              label="Ginástica Laboral" 
               active={activeTab === 'gym'} 
               onClick={() => setActiveTab('gym')} 
               collapsed={collapsed}

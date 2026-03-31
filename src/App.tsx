@@ -203,7 +203,7 @@ export default function App() {
           )}
 
           <AnimatePresence mode="wait">
-            {activeTab === 'home' && <HomeView key="home" />}
+            {activeTab === 'home' && <HomeView key="home" user={user} tenant={selectedTenant} />}
             {activeTab === 'dashboard' && <MonthlyDashboardView key="dashboard" />}
             {activeTab === 'strategic' && selectedTenant && (
               <StrategicDashboardView 
@@ -239,7 +239,7 @@ export default function App() {
               />
             )}
             {activeTab === 'action_plans' && <ActionPlansView key="action_plans" />}
-            {activeTab === 'evidence' && <EvidenceView key="evidence" />}
+            {activeTab === 'evidence' && <EvidenceView userRole={user.role} tenant={selectedTenant} />}
             {activeTab === 'campaigns' && <CampaignsView key="campaigns" />}
             {activeTab === 'gro' && selectedTenant && (
               <GROView tenant={selectedTenant} user={user} />

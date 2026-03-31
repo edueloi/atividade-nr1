@@ -14,13 +14,15 @@ import { ReportsHistory } from './ReportsHistory';
 import { ReportsSharing } from './ReportsSharing';
 import { ReportJob, ReportTemplate, ShareLink, ReportType } from './reportsTypes';
 import * as api from '../../services/api';
+import { ClientReportsView } from '../Client/ClientReportsView.js';
 
 interface ReportsViewProps {
   tenant: { id: string; name: string };
-  user: { id: string; name: string };
+  user: { id: string; name: string; role: string };
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({ tenant, user }) => {
+  const isReadOnlyRole = user.role === 'client' || user.role === 'auditor';
   const [activeTab, setActiveTab] = useState<'vision' | 'builder' | 'templates' | 'history' | 'sharing'>('vision');
   const [jobs, setJobs] = useState<ReportJob[]>([]);
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
@@ -29,8 +31,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ tenant, user }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isReadOnlyRole) {
+      setLoading(false);
+      return;
+    }
+
     loadData();
-  }, [tenant.id]);
+  }, [tenant.id, isReadOnlyRole]);
 
   const loadData = async () => {
     setLoading(true);
@@ -112,6 +119,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ tenant, user }) => {
 
   const lastReport = jobs.find(j => j.status === 'COMPLETED');
   const recentFailures = jobs.filter(j => j.status === 'FAILED').slice(0, 3);
+
+  if (isReadOnlyRole) {
+    return <ClientReportsView tenant={tenant} user={user} />;
+  }
 
   if (loading) {
     return (

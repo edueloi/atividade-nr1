@@ -30,7 +30,7 @@ import { useGrid } from '../../../hooks/useGrid';
 import { IGridColumn } from '../../../types/grid';
 import { Referral, ReferralStatus, Severity } from '../types';
 
-const mockReferrals: Referral[] = [
+export const mockReferrals: Referral[] = [
   { id: '1', date: '06/03/2026', origin: 'Queixa', unit: 'Unidade 1', sector: 'Montagem Final', bodyStructure: 'Lombar', severity: 'Alta', status: 'Novo', responsible: 'Dr. Silva' },
   { id: '2', date: '05/03/2026', origin: 'Ambulatório', unit: 'Unidade 1', sector: 'Logística', bodyStructure: 'Ombro', severity: 'Moderada', status: 'Em triagem', responsible: 'Dra. Maria' },
   { id: '3', date: '04/03/2026', origin: 'Ergonomia', unit: 'Unidade 2', sector: 'Pintura', bodyStructure: 'Cervical', severity: 'Leve', status: 'Agendado', responsible: 'Dr. Carlos' },
@@ -38,13 +38,20 @@ const mockReferrals: Referral[] = [
   { id: '5', date: '02/03/2026', origin: 'Queixa', unit: 'Unidade 1', sector: 'Estamparia', bodyStructure: 'Joelho', severity: 'Alta', status: 'Cancelado', notes: 'Paciente em férias' },
 ];
 
-export function PhysioReferrals() {
+interface PhysioReferralsProps {
+  data?: Referral[];
+}
+
+export function PhysioReferrals({ data = mockReferrals }: PhysioReferralsProps) {
   const [showActionMenu, setShowActionMenu] = useState<string | null>(null);
   const [selectedReferral, setSelectedReferral] = useState<Referral | null>(null);
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [showTriageModal, setShowTriageModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showCreateCaseModal, setShowCreateCaseModal] = useState(false);
+
+  const [painScale, setPainScale] = useState(6);
+  const [confirmedSeverity, setConfirmedSeverity] = useState<string | null>(null);
 
   const initialColumns: IGridColumn[] = [
     { id: 'date', name: 'Data', field: 'date', order: 1, isSortable: true, isFilterable: true, filterType: 'date' },
@@ -86,7 +93,7 @@ export function PhysioReferrals() {
   const { visibleColumns, toggleSort, updateFilter, columns } = useGrid(initialColumns);
 
   const filteredData = useMemo(() => {
-    return mockReferrals.filter(item => {
+    return data.filter(item => {
       return columns.every(col => {
         if (!col.filter) return true;
         const val = String(item[col.field as keyof Referral]).toLowerCase();
@@ -99,7 +106,7 @@ export function PhysioReferrals() {
       const factor = activeSort.sort === 'asc' ? 1 : -1;
       return a[field]! > b[field]! ? factor : -factor;
     });
-  }, [columns]);
+  }, [columns, data]);
 
   const handleRowClick = (row: Referral) => {
     setSelectedReferral(row);
@@ -348,16 +355,33 @@ export function PhysioReferrals() {
                   <label className="text-[10px] font-bold text-zinc-400 uppercase ml-1">Severidade Confirmada</label>
                   <div className="grid grid-cols-3 gap-2">
                     {['Leve', 'Moderada', 'Alta'].map(s => (
-                      <button key={s} className="px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-bold hover:border-emerald-500 transition-all">{s}</button>
+                      <button 
+                        key={s} 
+                        onClick={() => setConfirmedSeverity(s)}
+                        className={`px-3 py-2 border rounded-xl text-xs font-bold transition-all ${
+                          confirmedSeverity === s 
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                            : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:border-emerald-500'
+                        }`}
+                      >
+                        {s}
+                      </button>
                     ))}
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase ml-1">Escala de Dor (0-10)</label>
-                    <span className="text-lg font-black text-blue-600">6</span>
+                    <span className="text-lg font-black text-blue-600">{painScale}</span>
                   </div>
-                  <input type="range" min="0" max="10" defaultValue="6" className="w-full h-2 bg-zinc-100 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="10" 
+                    value={painScale} 
+                    onChange={(e) => setPainScale(parseInt(e.target.value))}
+                    className="w-full h-2 bg-zinc-100 rounded-lg appearance-none cursor-pointer accent-blue-600" 
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase ml-1">Conduta Inicial</label>
