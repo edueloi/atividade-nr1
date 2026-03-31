@@ -36,7 +36,7 @@ export function Sidebar({ collapsed, setCollapsed, activeTab, setActiveTab, user
       animate={{ width: collapsed ? 80 : 280 }}
       className="bg-white border-r border-zinc-200 flex flex-col h-screen sticky top-0 z-50 shadow-sm"
     >
-      <div className="p-6 flex flex-col gap-4">
+      <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           {!collapsed && (
             <div className="flex items-center justify-center w-full">

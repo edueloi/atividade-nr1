@@ -43,6 +43,9 @@ import {
   type GymSession,
   type GymTenantState,
 } from './gymStorage.js';
+import { AppModal } from '../../components/ui/AppModal.js';
+import { ModalButton } from '../../components/ui/ModalButton.js';
+import { ModalSelect } from '../../components/ui/ModalSelect.js';
 
 interface GymViewProps {
   tenant: { id: string; name: string };
@@ -161,6 +164,27 @@ function MetricCard({
   );
 }
 
+const MODAL_FIELD_CLASS =
+  'w-full h-11 rounded-xl border border-zinc-200 bg-white px-3.5 text-sm font-medium text-zinc-700 outline-none focus:border-emerald-500';
+const MODAL_TEXTAREA_CLASS =
+  'w-full min-h-[110px] rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm font-medium text-zinc-700 outline-none focus:border-emerald-500 resize-none';
+const MODAL_PANEL_CLASS = 'rounded-[28px] bg-zinc-50 border border-zinc-200 p-5';
+
+function buildOptionList(...groups: Array<Array<string | undefined> | undefined>) {
+  const seen = new Set<string>();
+
+  groups.forEach((group) => {
+    group?.forEach((value) => {
+      const next = (value || '').trim();
+      if (next) {
+        seen.add(next);
+      }
+    });
+  });
+
+  return Array.from(seen);
+}
+
 export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
   const [activeSubTab, setActiveSubTab] = useState<'operation' | 'schedule' | 'reports'>('operation');
   const [data, setData] = useState<GymTenantState | null>(null);
@@ -198,6 +222,26 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
     ? (feedbackValues.reduce((sum, value) => sum + value, 0) / feedbackValues.length).toFixed(1)
     : '-';
   const latestSnapshot = data?.monthlySnapshots[data.monthlySnapshots.length - 1];
+  const unitOptions = buildOptionList(
+    [tenant.name, sessionDraft?.unitName, scheduleDraft?.unitName],
+    data?.sessions.map((session) => session.unitName),
+    data?.schedules.map((schedule) => schedule.unitName),
+  );
+  const sectorOptions = buildOptionList(
+    [sessionDraft?.sectorName, scheduleDraft?.sectorName],
+    data?.sessions.map((session) => session.sectorName),
+    data?.schedules.map((schedule) => schedule.sectorName),
+  );
+  const shiftOptions = buildOptionList(
+    [sessionDraft?.shiftName, scheduleDraft?.shiftName],
+    data?.sessions.map((session) => session.shiftName),
+    data?.schedules.map((schedule) => schedule.shiftName),
+  );
+  const instructorOptions = buildOptionList(
+    [user.name, sessionDraft?.instructorName, scheduleDraft?.instructorName],
+    data?.sessions.map((session) => session.instructorName),
+    data?.schedules.map((schedule) => schedule.instructorName),
+  );
 
   const sectorPerformanceMap = new Map<
     string,
@@ -319,18 +363,19 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
       return;
     }
 
+    const reference = data?.schedules[0] || data?.sessions[0];
     const templateExercises = cloneValue(data?.schedules[0]?.exercises || data?.sessions[0]?.exercises || []);
     setScheduleDraft({
       id: createLocalId('schedule'),
       tenantId: tenant.id,
-      unitName: tenant.name,
-      sectorName: '',
-      shiftName: '',
-      dayOfWeek: 1,
-      startTime: '08:00',
-      durationMinutes: 10,
-      expectedCount: 10,
-      instructorName: user.name,
+      unitName: reference?.unitName || tenant.name,
+      sectorName: reference?.sectorName || '',
+      shiftName: reference?.shiftName || '',
+      dayOfWeek: 'dayOfWeek' in (reference || {}) ? Number(reference.dayOfWeek) || 1 : 1,
+      startTime: reference?.startTime || '08:00',
+      durationMinutes: reference?.durationMinutes || 10,
+      expectedCount: reference?.expectedCount || 10,
+      instructorName: reference?.instructorName || user.name,
       exercises: templateExercises,
     });
   };
@@ -841,40 +886,15 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
 
       <AnimatePresence>
         {sessionDraft && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-zinc-950/75 backdrop-blur-sm p-4 overflow-y-auto"
+          <AppModal
+            title={`${sessionDraft.sectorName} - ${sessionStatusLabel(sessionDraft.status)}`}
+            description={`Data de execucao: ${sessionDraft.date}. Ajuste presenca nominal, exercicios e colete feedback.`}
+            icon={<LayoutList size={20} />}
+            onClose={() => setSessionDraft(null)}
+            maxWidthClassName="max-w-[1240px]"
+            bodyClassName="p-8"
           >
-            <motion.div
-              initial={{ opacity: 0, y: 18, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 18, scale: 0.98 }}
-              className="max-w-6xl mx-auto bg-white rounded-[40px] border border-zinc-200 shadow-2xl overflow-hidden"
-            >
-              <div className="px-8 py-6 border-b border-zinc-100 flex items-start justify-between gap-4 bg-zinc-50/70">
-                <div>
-                  <div className="flex flex-wrap items-center gap-3 mb-2">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] ${sessionStatusClass(sessionDraft.status)}`}>
-                      {sessionStatusLabel(sessionDraft.status)}
-                    </span>
-                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">{sessionDraft.date}</span>
-                  </div>
-                  <h2 className="text-3xl font-black text-zinc-900">{sessionDraft.sectorName}</h2>
-                  <p className="text-sm text-zinc-500 mt-2">
-                    Presenca nominal, sequencia de exercicios e formulario externo da turma.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSessionDraft(null)}
-                  className="w-12 h-12 rounded-2xl bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900 transition-colors flex items-center justify-center"
-                >
-                  <X size={22} />
-                </button>
-              </div>
-
-              <div className="p-8 grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] gap-8">
                 <div className="space-y-6">
                   <div className="rounded-[30px] bg-zinc-50 border border-zinc-200 p-6 space-y-4">
                     <h3 className="text-xl font-black text-zinc-900">Dados da turma</h3>
@@ -1001,27 +1021,30 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <button
+                    <ModalButton
+                      variant="ghost"
                       onClick={() => handlePersistSession('planned')}
-                      className="px-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-colors flex items-center justify-center gap-2"
+                      iconLeft={<Save size={16} />}
+                      fullWidth
                     >
-                      <Save size={16} />
                       Salvar
-                    </button>
-                    <button
+                    </ModalButton>
+                    <ModalButton
+                      variant="secondary"
                       onClick={() => handlePersistSession('running')}
-                      className="px-4 py-3 bg-amber-500 text-white rounded-2xl text-sm font-bold hover:bg-amber-600 transition-colors flex items-center justify-center gap-2"
+                      iconLeft={<Play size={16} />}
+                      fullWidth
                     >
-                      <Play size={16} />
                       Em andamento
-                    </button>
-                    <button
+                    </ModalButton>
+                    <ModalButton
+                      variant="primary"
                       onClick={() => handlePersistSession('finished')}
-                      className="px-4 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                      iconLeft={<CheckCircle2 size={16} />}
+                      fullWidth
                     >
-                      <CheckCircle2 size={16} />
                       Concluir
-                    </button>
+                    </ModalButton>
                   </div>
                 </div>
 
@@ -1196,39 +1219,21 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
                   </div>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
+          </AppModal>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {scheduleDraft && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-zinc-950/75 backdrop-blur-sm p-4 flex items-center justify-center"
+          <AppModal
+            title="Recorrencia da ginastica"
+            description="Defina setor, turno, horario e base prevista para o calendario."
+            icon={<CalendarDays size={20} />}
+            onClose={() => setScheduleDraft(null)}
+            maxWidthClassName="max-w-2xl"
+            bodyClassName="p-8 space-y-5"
           >
-            <motion.div
-              initial={{ opacity: 0, y: 18, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 18, scale: 0.98 }}
-              className="w-full max-w-2xl bg-white rounded-[40px] border border-zinc-200 shadow-2xl overflow-hidden"
-            >
-              <div className="px-8 py-6 border-b border-zinc-100 flex items-start justify-between gap-4 bg-zinc-50/70">
-                <div>
-                  <h2 className="text-3xl font-black text-zinc-900">Recorrencia da ginastica</h2>
-                  <p className="text-sm text-zinc-500 mt-2">Defina setor, turno, horario e base prevista para o calendario.</p>
-                </div>
-                <button
-                  onClick={() => setScheduleDraft(null)}
-                  className="w-12 h-12 rounded-2xl bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900 transition-colors flex items-center justify-center"
-                >
-                  <X size={22} />
-                </button>
-              </div>
-
-              <div className="p-8 space-y-5">
+            <div className="space-y-5">
                 <label className="block space-y-2">
                   <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">Unidade</span>
                   <input
@@ -1318,24 +1323,25 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
+                  <ModalButton
+                    variant="primary"
                     onClick={saveScheduleDraft}
-                    className="px-4 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                    iconLeft={<Save size={16} />}
+                    fullWidth
                   >
-                    <Save size={16} />
                     Salvar recorrencia
-                  </button>
-                  <button
+                  </ModalButton>
+                  <ModalButton
+                    variant="danger"
                     onClick={deleteScheduleDraft}
-                    className="px-4 py-3 bg-rose-50 text-rose-700 rounded-2xl text-sm font-bold hover:bg-rose-100 transition-colors flex items-center justify-center gap-2"
+                    iconLeft={<Trash2 size={16} />}
+                    fullWidth
                   >
-                    <Trash2 size={16} />
                     Excluir
-                  </button>
+                  </ModalButton>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
+          </AppModal>
         )}
       </AnimatePresence>
     </div>

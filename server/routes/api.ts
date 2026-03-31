@@ -14,6 +14,18 @@ router.get("/units/:tenantId", (req, res) => {
   res.json(units);
 });
 
+router.get("/sectors", (req, res) => {
+  const { unitId } = req.query;
+
+  if (!unitId) {
+    res.json([]);
+    return;
+  }
+
+  const sectors = db.prepare("SELECT * FROM sectors WHERE unit_id = ? ORDER BY name").all(unitId);
+  res.json(sectors);
+});
+
 router.get("/dashboard/stats/:tenantId", (req, res) => {
   const { tenantId } = req.params;
   

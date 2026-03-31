@@ -8,6 +8,30 @@ export async function fetchUnits(tenantId: string) {
   return response.json();
 }
 
+const FALLBACK_SECTORS_BY_UNIT: Record<string, Array<{ id: string; unit_id: string; name: string }>> = {
+  'toyota-sorocaba': [
+    { id: 'toyota-montagem', unit_id: 'toyota-sorocaba', name: 'Montagem Cross' },
+  ],
+};
+
+export async function fetchSectors(unitId: string) {
+  const fallback = FALLBACK_SECTORS_BY_UNIT[unitId] || [];
+
+  try {
+    const response = await fetch(`/api/sectors?unitId=${encodeURIComponent(unitId)}`);
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!response.ok || !contentType.includes('application/json')) {
+      return fallback;
+    }
+
+    const data = await response.json();
+    return Array.isArray(data) && data.length > 0 ? data : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function fetchDashboardStats(tenantId: string) {
   const response = await fetch(`/api/dashboard/stats/${tenantId}`);
   return response.json();

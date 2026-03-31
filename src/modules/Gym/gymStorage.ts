@@ -532,27 +532,31 @@ export function createAdhocGymSession(tenantId: string, tenantName: string, inst
 
   withTenantState(tenantId, tenantName, (tenant) => {
     const today = formatIsoDate(new Date());
-    const participants = createParticipants(
+    const defaultParticipants = createParticipants(
       ['Colaborador 01', 'Colaborador 02', 'Colaborador 03', 'Colaborador 04', 'Colaborador 05', 'Colaborador 06'],
       'GL-X',
       'Equipe',
     );
+    const referenceSchedule = tenant.schedules[0];
+    const referenceSession = tenant.sessions[0];
+    const participants = clone(referenceSession?.participants || defaultParticipants);
+    const exercises = clone(referenceSchedule?.exercises || referenceSession?.exercises || createExercises('production'));
 
     created = {
       id: createId('session'),
       tenantId,
-      unitName: tenantName,
-      sectorName: 'Nova turma',
-      shiftName: 'Turno customizado',
+      unitName: referenceSchedule?.unitName || referenceSession?.unitName || tenantName,
+      sectorName: referenceSchedule?.sectorName || referenceSession?.sectorName || 'Nova turma',
+      shiftName: referenceSchedule?.shiftName || referenceSession?.shiftName || 'Turno customizado',
       date: today,
-      startTime: '10:00',
-      durationMinutes: 10,
+      startTime: referenceSchedule?.startTime || referenceSession?.startTime || '10:00',
+      durationMinutes: referenceSchedule?.durationMinutes || referenceSession?.durationMinutes || 10,
       expectedCount: participants.length,
-      instructorName,
+      instructorName: referenceSchedule?.instructorName || referenceSession?.instructorName || instructorName,
       status: 'planned',
       notes: 'Sessao criada manualmente para ajuste operacional.',
       evidenceCount: 0,
-      exercises: createExercises('production'),
+      exercises,
       participants,
     };
 

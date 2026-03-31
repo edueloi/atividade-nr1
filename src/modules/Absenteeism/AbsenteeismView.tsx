@@ -14,6 +14,9 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
 import { StatCard } from '../../components/StatCard';
+import { AppModal } from '../../components/ui/AppModal.js';
+import { ModalButton } from '../../components/ui/ModalButton.js';
+import { ModalSelect } from '../../components/ui/ModalSelect.js';
 import { 
   fetchAbsenteeismRecords, 
   createAbsenteeismRecord, 
@@ -21,6 +24,7 @@ import {
   deleteAbsenteeismRecord, 
   fetchAbsenteeismSummary,
   fetchUnits,
+  fetchSectors,
   fetchAbsenteeismRecord,
   updateAbsenteeismRecord,
   fetchAbsenteeismAttachments,
@@ -35,6 +39,40 @@ interface AbsenteeismViewProps {
 }
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#6366f1'];
+const COMPACT_INPUT_CLASS = 'w-full h-11 px-3.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/15';
+const COMPACT_TEXTAREA_CLASS = 'w-full min-h-[96px] px-3.5 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/15 resize-none';
+
+function buildEmptyAbsenceRecord(unitId: string, status: 'CONFIRMED' | 'PENDING') {
+  return {
+    unit_id: unitId,
+    sector_id: '',
+    shift_id: '',
+    start_date: '',
+    end_date: '',
+    days_lost: 0,
+    range_class: 'LT15' as 'LT15' | 'GT15',
+    cid_group: 'F' as 'F' | 'G' | 'I' | 'OUTROS',
+    cid_code: '',
+    notes: '',
+    status,
+  };
+}
+
+function toAbsenceDraft(record: any) {
+  return {
+    unit_id: record.unit_id || '',
+    sector_id: record.sector_id || '',
+    shift_id: record.shift_id || '',
+    start_date: record.start_date || '',
+    end_date: record.end_date || '',
+    days_lost: record.days_lost || 0,
+    range_class: (record.range_class || 'LT15') as 'LT15' | 'GT15',
+    cid_group: (record.cid_group || 'F') as 'F' | 'G' | 'I' | 'OUTROS',
+    cid_code: record.cid_code || '',
+    notes: record.notes || '',
+    status: record.status || 'PENDING',
+  };
+}
 
 export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }) => {
   const [activeSubTab, setActiveSubTab] = useState<'summary' | 'list' | 'analysis' | 'config'>('summary');
@@ -43,6 +81,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
   const [loading, setLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
   const [units, setUnits] = useState<any[]>([]);
+  const [sectors, setSectors] = useState<any[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const [filters, setFilters] = useState({
@@ -66,21 +105,15 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
   
   // Modal State
   const [modalStep, setModalStep] = useState(1);
-  const [newRecord, setNewRecord] = useState({
-    unit_id: '',
-    sector_id: '',
-    shift_id: '',
-    start_date: '',
-    end_date: '',
-    days_lost: 0,
-    range_class: 'LT15' as 'LT15' | 'GT15',
-    cid_group: 'F' as 'F' | 'G' | 'I' | 'OUTROS',
-    cid_code: '',
-    notes: '',
-    status: user.role === 'admin_atividade' ? 'CONFIRMED' : 'PENDING'
-  });
+  const [newRecord, setNewRecord] = useState(() =>
+    buildEmptyAbsenceRecord('', user.role === 'admin_atividade' ? 'CONFIRMED' : 'PENDING'),
+  );
 
   const isAdmin = user.role === 'admin_atividade';
+  const defaultStatus = isAdmin ? 'CONFIRMED' : 'PENDING';
+  const hasExplicitUnitContext = Boolean(filters.unitId) || units.length === 1;
+  const activeUnitId = filters.unitId || units[0]?.id || '';
+  const activeUnit = units.find((unit) => unit.id === activeUnitId) || units[0] || null;
 
   useEffect(() => {
     loadData();
@@ -90,6 +123,26 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
   const loadUnits = async () => {
     const data = await fetchUnits(tenant.id);
     setUnits(data);
+    if (!filters.unitId && data.length === 1) {
+      setFilters((prev) => ({ ...prev, unitId: data[0].id }));
+    }
+  };
+
+  const loadSectorsByUnit = async (unitId: string) => {
+    if (!unitId) {
+      setSectors([]);
+      return;
+    }
+
+    try {
+      const data = await fetchSectors(unitId);
+      setSectors(data);
+      return data;
+    } catch (error) {
+      console.error('Error loading sectors:', error);
+      setSectors([]);
+      return [];
+    }
   };
 
   const loadData = async () => {
@@ -139,6 +192,48 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
     }));
   }, [newRecord.start_date, newRecord.end_date]);
 
+  useEffect(() => {
+    if (!showNewModal) return;
+    void loadSectorsByUnit(newRecord.unit_id || activeUnitId);
+  }, [showNewModal, newRecord.unit_id, activeUnitId]);
+
+  const closeNewRecordModal = () => {
+    setShowNewModal(false);
+    setModalStep(1);
+    setIsEditing(false);
+    setSelectedRecordId(null);
+    setNewRecord(buildEmptyAbsenceRecord(activeUnitId, defaultStatus));
+  };
+
+  const openNewRecordModal = async () => {
+    if (!hasExplicitUnitContext) {
+      addToast('Selecione a unidade no filtro antes de criar o atestado.', 'error');
+      return;
+    }
+
+    const nextUnitId = activeUnitId;
+    const availableSectors = await loadSectorsByUnit(nextUnitId);
+
+    setIsEditing(false);
+    setSelectedRecordId(null);
+    setModalStep(1);
+    setNewRecord({
+      ...buildEmptyAbsenceRecord(nextUnitId, defaultStatus),
+      sector_id: availableSectors.length === 1 ? availableSectors[0].id : '',
+    });
+    setShowNewModal(true);
+  };
+
+  const openEditRecordModal = async (record: any, recordId?: string) => {
+    const draft = toAbsenceDraft(record);
+    await loadSectorsByUnit(draft.unit_id);
+    setNewRecord(draft);
+    setSelectedRecordId(recordId || record.id || null);
+    setIsEditing(true);
+    setModalStep(1);
+    setShowNewModal(true);
+  };
+
   const handleSave = async () => {
     try {
       if (isEditing && selectedRecordId) {
@@ -157,9 +252,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
         });
         addToast('Atestado criado com sucesso');
       }
-      setShowNewModal(false);
-      setModalStep(1);
-      setIsEditing(false);
+      closeNewRecordModal();
       loadData();
     } catch (error) {
       addToast('Erro ao salvar atestado', 'error');
@@ -188,6 +281,8 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
       addToast('Erro ao confirmar atestado', 'error');
     }
   };
+
+  const canAdvanceModal = Boolean(newRecord.unit_id && newRecord.sector_id && newRecord.start_date && newRecord.end_date);
 
   return (
     <div className="space-y-8">
@@ -242,7 +337,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                 >
                   <option value={1}>Janeiro</option>
                   <option value={2}>Fevereiro</option>
-                  <option value={3}>Março</option>
+                  <option value={3}>MarÃ§o</option>
                   <option value={4}>Abril</option>
                   <option value={5}>Maio</option>
                   <option value={6}>Junho</option>
@@ -436,7 +531,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                   Exportar
                 </button>
                 <button 
-                  onClick={() => setShowNewModal(true)}
+                  onClick={() => void openNewRecordModal()}
                   className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 shadow-sm"
                 >
                   <Plus className="w-4 h-4" />
@@ -497,7 +592,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                             record.status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-600' : 
                             record.status === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-zinc-50 text-zinc-400'
                           }`}>
-                            {record.status === 'CONFIRMED' ? 'Confirmado' : record.status === 'PENDING' ? 'Pendente' : 'Revisão'}
+                            {record.status === 'CONFIRMED' ? 'Confirmado' : record.status === 'PENDING' ? 'Pendente' : 'RevisÃ£o'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -523,13 +618,8 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                                 </button>
                                 {isAdmin && (
                                   <>
-                                    <button 
-                                      onClick={() => {
-                                        setNewRecord(record);
-                                        setIsEditing(true);
-                                        setSelectedRecordId(record.id);
-                                        setShowNewModal(true);
-                                      }}
+                                    <button
+                                      onClick={() => void openEditRecordModal(record, record.id)}
                                       className="w-full px-4 py-2 text-left text-sm text-zinc-600 hover:bg-zinc-50 flex items-center gap-2"
                                     >
                                       <Save className="w-4 h-4" /> Editar
@@ -572,7 +662,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
             className="p-12 text-center bg-white rounded-3xl border border-zinc-200 shadow-sm"
           >
             <BarChart3 className="w-16 h-16 text-zinc-200 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-zinc-900">Análises Avançadas</h2>
+            <h2 className="text-xl font-bold text-zinc-900">Análises AvanÃ§adas</h2>
             <p className="text-zinc-500 max-w-md mx-auto mt-2">
               Em breve: Drilldowns por setor, comparativos anuais e tendências preditivas de afastamento.
             </p>
@@ -634,48 +724,26 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
       {/* New Record Modal */}
       <AnimatePresence>
         {showNewModal && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-zinc-900/90 backdrop-blur-sm flex items-center justify-center p-4"
+          <AppModal
+            title={isEditing ? 'Editar Atestado' : 'Novo Atestado'}
+            description="Registro de afastamento e impacto."
+            icon={<Plus className="w-5 h-5" />}
+            onClose={closeNewRecordModal}
+            maxWidthClassName="max-w-[680px]"
+            bodyClassName="p-5"
           >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-            >
-              <div className="p-8 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200">
-                    <Plus className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-zinc-900">Novo Atestado</h2>
-                    <p className="text-zinc-500 text-sm">Registro de afastamento e impacto.</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setShowNewModal(false)}
-                  className="p-3 hover:bg-zinc-100 rounded-2xl transition-colors text-zinc-400"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <div className="space-y-6">
                 {/* Steps */}
-                <div className="flex items-center justify-center gap-4 mb-12">
+                <div className="flex items-center justify-center gap-2.5 mb-6">
                   {[1, 2].map((s) => (
                     <React.Fragment key={s}>
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
-                        modalStep === s ? 'bg-emerald-600 text-white scale-110 shadow-lg shadow-emerald-200' : 
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs transition-all ${
+                        modalStep === s ? 'bg-emerald-600 text-white shadow-md shadow-emerald-100' : 
                         modalStep > s ? 'bg-emerald-100 text-emerald-600' : 'bg-zinc-100 text-zinc-400'
                       }`}>
-                        {modalStep > s ? <CheckCircle2 className="w-5 h-5" /> : s}
+                        {modalStep > s ? <CheckCircle2 className="w-4 h-4" /> : s}
                       </div>
-                      {s < 2 && <div className={`w-12 h-0.5 rounded-full ${modalStep > s ? 'bg-emerald-600' : 'bg-zinc-100'}`} />}
+                      {s < 2 && <div className={`w-10 h-px rounded-full ${modalStep > s ? 'bg-emerald-600' : 'bg-zinc-200'}`} />}
                     </React.Fragment>
                   ))}
                 </div>
@@ -684,78 +752,83 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                   <motion.div 
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="space-y-6"
+                    className="space-y-5"
                   >
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-700">Unidade</label>
-                        <select 
-                          value={newRecord.unit_id}
-                          onChange={(e) => setNewRecord({ ...newRecord, unit_id: e.target.value })}
-                          className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                        >
-                          <option value="">Selecione...</option>
-                          {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-700">Setor</label>
-                        <select 
-                          value={newRecord.sector_id}
-                          onChange={(e) => setNewRecord({ ...newRecord, sector_id: e.target.value })}
-                          className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                        >
-                          <option value="">Selecione...</option>
-                          <option value="toyota-montagem">Montagem Cross</option>
-                          <option value="toyota-logistica">Logística</option>
-                        </select>
-                      </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <ModalSelect
+                        label="Unidade"
+                        value={newRecord.unit_id}
+                        onChange={async (e) => {
+                          const unitId = e.target.value;
+                          setNewRecord({ ...newRecord, unit_id: unitId, sector_id: '' });
+                          await loadSectorsByUnit(unitId);
+                        }}
+                      >
+                        <option value="">Selecione a unidade...</option>
+                        {units.map((u) => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </ModalSelect>
+                      <ModalSelect
+                        label="Setor"
+                        value={newRecord.sector_id}
+                        onChange={(e) => setNewRecord({ ...newRecord, sector_id: e.target.value })}
+                        disabled={!newRecord.unit_id}
+                      >
+                        <option value="">{sectors.length === 0 ? 'Nenhum setor disponível' : 'Selecione...'}</option>
+                        {sectors.map((sector) => (
+                          <option key={sector.id} value={sector.id}>
+                            {sector.name}
+                          </option>
+                        ))}
+                      </ModalSelect>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-700">Data Início</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-700">Data inicio</label>
                         <input 
                           type="date" 
                           value={newRecord.start_date}
                           onChange={(e) => setNewRecord({ ...newRecord, start_date: e.target.value })}
-                          className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          className={COMPACT_INPUT_CLASS}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-700">Data Fim</label>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-700">Data fim</label>
                         <input 
                           type="date" 
                           value={newRecord.end_date}
                           onChange={(e) => setNewRecord({ ...newRecord, end_date: e.target.value })}
-                          className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          className={COMPACT_INPUT_CLASS}
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between p-6 bg-zinc-50 rounded-[32px] border border-zinc-100">
+                    <div className="flex items-center justify-between gap-4 p-3.5 bg-zinc-50 rounded-[22px] border border-zinc-200">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
-                          <Calendar className="text-emerald-600" />
+                        <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm border border-zinc-100">
+                          <Calendar className="w-4 h-4 text-emerald-600" />
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Impacto Calculado</span>
-                          <div className="text-2xl font-bold text-zinc-900">{newRecord.days_lost} dias</div>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.18em]">Impacto Calculado</span>
+                          <div className="text-lg font-black text-zinc-900">{newRecord.days_lost} dias</div>
                         </div>
                       </div>
-                      <div className={`px-4 py-2 rounded-xl text-xs font-bold ${newRecord.range_class === 'GT15' ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'}`}>
+                      <div className={`px-3 py-1.5 rounded-xl text-[11px] font-bold ${newRecord.range_class === 'GT15' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}`}>
                         {newRecord.range_class === 'GT15' ? '> 15 Dias (INSS)' : '< 15 Dias'}
                       </div>
                     </div>
 
-                    <button 
+                    <ModalButton
                       onClick={() => setModalStep(2)}
-                      disabled={!newRecord.unit_id || !newRecord.sector_id || !newRecord.start_date || !newRecord.end_date}
-                      className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      disabled={!canAdvanceModal}
+                      iconRight={<ArrowRight className="w-4 h-4" />}
+                      size="sm"
+                      fullWidth
                     >
-                      Próximo Passo
-                      <ArrowRight className="w-5 h-5" />
-                    </button>
+                      Próximo passo
+                    </ModalButton>
                   </motion.div>
                 )}
 
@@ -763,18 +836,18 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                   <motion.div 
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="space-y-8"
+                    className="space-y-5"
                   >
-                    <div className="space-y-6">
-                      <div className="space-y-4">
-                        <label className="text-xs font-bold text-zinc-700">Grupo CID</label>
-                        <div className="grid grid-cols-4 gap-3">
+                    <div className="space-y-5">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.16em]">Grupo CID</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                           {['F', 'G', 'I', 'OUTROS'].map((g) => (
                             <button 
                               key={g}
                               onClick={() => setNewRecord({ ...newRecord, cid_group: g as any })}
-                              className={`py-4 rounded-2xl border-2 font-bold text-sm transition-all ${
-                                newRecord.cid_group === g ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-zinc-100 text-zinc-400 hover:border-emerald-200'
+                              className={`h-9 rounded-lg border font-bold text-sm transition-all ${
+                                newRecord.cid_group === g ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-zinc-200 text-zinc-500 hover:border-emerald-200'
                               }`}
                             >
                               {g}
@@ -783,56 +856,58 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-700">Código CID (Opcional)</label>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-700">Código CID (opcional)</label>
                         <input 
                           type="text" 
                           placeholder="Ex: F32.1"
                           value={newRecord.cid_code}
                           onChange={(e) => setNewRecord({ ...newRecord, cid_code: e.target.value })}
-                          className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          className={COMPACT_INPUT_CLASS}
                         />
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <label className="text-xs font-bold text-zinc-700">Observações</label>
                         <textarea 
                           value={newRecord.notes}
                           onChange={(e) => setNewRecord({ ...newRecord, notes: e.target.value })}
-                          className="w-full h-24 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
+                          className={COMPACT_TEXTAREA_CLASS}
                         />
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <label className="text-xs font-bold text-zinc-700">Anexo (Foto/PDF)</label>
-                        <div className="p-8 border-2 border-dashed border-zinc-200 rounded-3xl flex flex-col items-center justify-center gap-3 text-zinc-400 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 transition-all cursor-pointer group">
-                          <Camera className="w-8 h-8 group-hover:scale-110 transition-transform" />
-                          <span className="text-xs font-bold uppercase tracking-wider">Clique para anexar</span>
+                        <div className="h-11 px-3.5 border border-dashed border-zinc-200 rounded-xl bg-zinc-50 flex items-center gap-3 text-sm text-zinc-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors cursor-pointer">
+                          <Camera className="w-4 h-4" />
+                          <span>Clique para anexar</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex gap-4">
-                      <button 
+                    <div className="flex flex-col-reverse sm:flex-row gap-3">
+                      <ModalButton 
+                        variant="secondary"
                         onClick={() => setModalStep(1)}
-                        className="flex-1 py-4 bg-zinc-100 text-zinc-600 rounded-2xl font-bold hover:bg-zinc-200 transition-all flex items-center justify-center gap-2"
+                        iconLeft={<ArrowLeft className="w-4 h-4" />}
+                        size="sm"
+                        className="sm:min-w-[116px]"
                       >
-                        <ArrowLeft className="w-5 h-5" />
                         Voltar
-                      </button>
-                      <button 
+                      </ModalButton>
+                      <ModalButton 
                         onClick={handleSave}
-                        className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all flex items-center justify-center gap-2"
+                        iconLeft={<Save className="w-4 h-4" />}
+                        size="sm"
+                        className="sm:flex-1"
                       >
-                        <Save className="w-5 h-5" />
                         {isAdmin ? 'Salvar e Confirmar' : 'Salvar como Pendente'}
-                      </button>
+                      </ModalButton>
                     </div>
                   </motion.div>
                 )}
-              </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </AppModal>
         )}
       </AnimatePresence>
 
@@ -919,9 +994,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                 recordId={selectedRecordId} 
                 onClose={() => setShowDrawer(false)}
                 onEdit={(record) => {
-                  setNewRecord(record);
-                  setIsEditing(true);
-                  setShowNewModal(true);
+                  void openEditRecordModal(record, selectedRecordId || undefined);
                   setShowDrawer(false);
                 }}
                 onConfirm={() => handleConfirmStatus(selectedRecordId)}
@@ -1027,10 +1100,10 @@ const AbsenteeismDrawer: React.FC<{
               record.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700' : 
               record.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-500'
             }`}>
-              {record.status === 'CONFIRMED' ? 'Confirmado' : record.status === 'PENDING' ? 'Pendente' : 'Revisão'}
+              {record.status === 'CONFIRMED' ? 'Confirmado' : record.status === 'PENDING' ? 'Pendente' : 'RevisÃ£o'}
             </span>
           </div>
-          <p className="text-sm text-zinc-500">{record.sector_name} • {record.unit_name}</p>
+          <p className="text-sm text-zinc-500">{record.sector_name} â€¢ {record.unit_name}</p>
         </div>
       </div>
 
@@ -1161,3 +1234,4 @@ const AbsenteeismDrawer: React.FC<{
     </div>
   );
 };
+
