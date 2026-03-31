@@ -153,13 +153,17 @@ function MetricCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-[30px] border border-zinc-200 shadow-sm p-6">
-      <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-700 flex items-center justify-center mb-4">
-        {icon}
+    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-4">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-0.5">{title}</p>
+          <div className="text-2xl font-black text-zinc-900 leading-tight">{value}</div>
+        </div>
+        <div className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-600 flex items-center justify-center shrink-0">
+          {icon}
+        </div>
       </div>
-      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400 mb-2">{title}</p>
-      <div className="text-3xl font-black text-zinc-900">{value}</div>
-      <p className="text-sm text-zinc-500 mt-2">{hint}</p>
+      <p className="text-xs text-zinc-500 leading-snug">{hint}</p>
     </div>
   );
 }
@@ -192,6 +196,7 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
   const [sessionDraft, setSessionDraft] = useState<GymSession | null>(null);
   const [scheduleDraft, setScheduleDraft] = useState<GymSchedule | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [showRightDrawer, setShowRightDrawer] = useState(false);
 
   const todayKey = formatIsoDate(new Date());
 
@@ -427,6 +432,13 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
 
         <div className="flex flex-wrap items-center gap-3">
           <button
+            onClick={() => setShowRightDrawer(true)}
+            className="px-4 py-3 bg-zinc-800 text-white border border-zinc-800 rounded-2xl text-sm font-bold hover:bg-zinc-700 transition-colors flex items-center gap-2"
+          >
+            <LayoutList size={16} />
+            Checklist e Fila
+          </button>
+          <button
             onClick={loadData}
             className="px-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-colors flex items-center gap-2"
           >
@@ -497,7 +509,7 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
               />
             </div>
 
-            <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.5fr)_360px] gap-6">
+            <div className="space-y-6">
               <div className="space-y-5">
                 {todaySessions.map((session) => {
                   const share = session.externalShareToken ? shareMap.get(session.externalShareToken) : undefined;
@@ -505,61 +517,61 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
                   const rate = attendanceRate(session);
 
                   return (
-                    <div key={session.id} className="bg-white rounded-[32px] border border-zinc-200 shadow-sm p-6">
+                    <div key={session.id} className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-5">
                       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
                         <div className="space-y-4 flex-1">
                           <div className="flex flex-wrap items-center gap-3">
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] ${sessionStatusClass(session.status)}`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] ${sessionStatusClass(session.status)}`}>
                               {sessionStatusLabel(session.status)}
                             </span>
-                            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
                               {session.unitName}
                             </span>
                           </div>
 
                           <div>
-                            <h2 className="text-2xl font-black text-zinc-900">{session.sectorName}</h2>
-                            <p className="text-sm text-zinc-500 mt-1">
+                            <h2 className="text-lg leading-tight font-black text-zinc-900">{session.sectorName}</h2>
+                            <p className="text-xs text-zinc-500 mt-1">
                               {session.shiftName} · {session.startTime} · {session.durationMinutes} min · Profissional {session.instructorName}
                             </p>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
-                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Presentes</p>
-                              <p className="text-2xl font-black text-zinc-900">{presentCount(session)}</p>
-                              <p className="text-xs text-zinc-500 mt-2">Base esperada {session.expectedCount}</p>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-1">Presentes</p>
+                              <p className="text-lg font-black text-zinc-900 leading-tight">{presentCount(session)}</p>
+                              <p className="text-[10px] text-zinc-500 mt-1">Base esperada {session.expectedCount}</p>
                             </div>
-                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
-                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Aderencia</p>
-                              <p className="text-2xl font-black text-zinc-900">{rate}%</p>
-                              <div className="mt-3 h-2 rounded-full bg-zinc-200 overflow-hidden">
+                            <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-1">Aderencia</p>
+                              <p className="text-lg font-black text-zinc-900 leading-tight">{rate}%</p>
+                              <div className="mt-2 h-1.5 rounded-full bg-zinc-200 overflow-hidden">
                                 <div className={`h-full ${rate >= 80 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(rate, 100)}%` }} />
                               </div>
                             </div>
-                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
-                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Exercicios</p>
-                              <p className="text-2xl font-black text-zinc-900">{session.exercises.length}</p>
-                              <p className="text-xs text-zinc-500 mt-2">
-                                {session.exercises.filter((exercise) => exercise.completed).length} marcados na execucao
+                            <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-1">Exercicios</p>
+                              <p className="text-lg font-black text-zinc-900 leading-tight">{session.exercises.length}</p>
+                              <p className="text-[10px] text-zinc-500 mt-1">
+                                {session.exercises.filter((exercise) => exercise.completed).length} marcados
                               </p>
                             </div>
-                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
-                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Feedback</p>
-                              <p className="text-2xl font-black text-zinc-900">{feedback ?? '-'}</p>
-                              <p className="text-xs text-zinc-500 mt-2">
-                                {share ? `${share.submissions} respostas externas` : 'Sem link enviado'}
+                            <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-1">Feedback</p>
+                              <p className="text-lg font-black text-zinc-900 leading-tight">{feedback ?? '-'}</p>
+                              <p className="text-[10px] text-zinc-500 mt-1">
+                                {share ? `${share.submissions} respostas` : 'S/ link'}
                               </p>
                             </div>
                           </div>
                         </div>
 
-                        <div className="lg:w-[280px] space-y-3">
+                        <div className="lg:w-[240px] space-y-3">
                           <button
                             onClick={() => openSession(session)}
-                            className="w-full px-4 py-3 bg-zinc-900 text-white rounded-2xl text-sm font-bold hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
+                            className="w-full h-10 px-3 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
                           >
-                            <PencilLine size={16} />
+                            <PencilLine size={14} />
                             Abrir gestao da turma
                           </button>
 
@@ -567,34 +579,34 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
                             <>
                               <button
                                 onClick={() => copyShareLink(share.token)}
-                                className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-50 transition-colors flex items-center justify-center gap-2"
+                                className="w-full h-10 px-3 bg-white border border-zinc-200 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-50 transition-colors flex items-center justify-center gap-2"
                               >
-                                <Link2 size={16} />
-                                {copiedToken === share.token ? 'Link copiado' : 'Copiar link externo'}
+                                <Link2 size={14} />
+                                {copiedToken === share.token ? 'Copiado' : 'Copiar link externo'}
                               </button>
                               <button
                                 onClick={() => window.open(buildShareUrl(share.token), '_blank', 'noopener,noreferrer')}
-                                className="w-full px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-sm font-bold text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
+                                className="w-full h-10 px-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
                               >
-                                <ExternalLink size={16} />
+                                <ExternalLink size={14} />
                                 Abrir formulario
                               </button>
                             </>
                           ) : (
                             <button
                               onClick={() => handleCreateShare(session.id)}
-                              className="w-full px-4 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                              className="w-full h-10 px-3 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 shadow-sm shadow-emerald-100"
                             >
-                              <MessageSquare size={16} />
-                              Gerar formulario externo
+                              <MessageSquare size={14} />
+                              Gerar form externo
                             </button>
                           )}
 
                           {share && (
-                            <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-4">
-                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-2">Coleta externa</p>
-                              <p className="text-sm font-bold text-zinc-900">{share.submissions} respostas</p>
-                              <p className="text-xs text-zinc-500 mt-1">{share.opens} acessos ao link</p>
+                            <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-1">Coleta</p>
+                              <p className="text-xs font-bold text-zinc-900">{share.submissions} respostas</p>
+                              <p className="text-[10px] text-zinc-500 mt-0.5">{share.opens} acessos ao link</p>
                             </div>
                           )}
                         </div>
@@ -603,64 +615,7 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
                   );
                 })}
               </div>
-
-              <div className="space-y-6">
-                <div className="bg-white rounded-[32px] border border-zinc-200 shadow-sm p-6">
-                  <h3 className="text-xl font-black text-zinc-900">Fila de links externos</h3>
-                  <p className="text-sm text-zinc-500 mt-2">Cada link registra presenca nominal e leitura simples da aula.</p>
-                  <div className="space-y-4 mt-6">
-                    {activeShares.length === 0 && (
-                      <div className="rounded-3xl bg-zinc-50 border border-zinc-200 p-5 text-sm text-zinc-500">
-                        Nenhum formulario ativo no momento.
-                      </div>
-                    )}
-                    {activeShares.map((share) => {
-                      const session = data.sessions.find((item) => item.id === share.sessionId);
-                      if (!session) return null;
-                      return (
-                        <div key={share.token} className="rounded-3xl bg-zinc-50 border border-zinc-200 p-5 space-y-3">
-                          <div>
-                            <p className="font-black text-zinc-900">{session.sectorName}</p>
-                            <p className="text-sm text-zinc-500">{session.shiftName} · {session.startTime}</p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div className="rounded-2xl bg-white border border-zinc-200 p-3">
-                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-400 mb-1">Respostas</p>
-                              <p className="font-black text-zinc-900">{share.submissions}</p>
-                            </div>
-                            <div className="rounded-2xl bg-white border border-zinc-200 p-3">
-                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-400 mb-1">Acessos</p>
-                              <p className="font-black text-zinc-900">{share.opens}</p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => copyShareLink(share.token)}
-                            className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-2xl text-sm font-bold text-zinc-700 hover:bg-zinc-100 transition-colors"
-                          >
-                            {copiedToken === share.token ? 'Link copiado' : 'Copiar link'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-[32px] border border-zinc-200 shadow-sm p-6">
-                  <h3 className="text-xl font-black text-zinc-900">Checklist operacional</h3>
-                  <div className="space-y-3 mt-5">
-                    {[
-                      `${todaySessions.filter((session) => session.status === 'planned').length} turmas ainda precisam iniciar`,
-                      `${todaySessions.filter((session) => session.externalShareToken).length} turmas com formulario externo pronto`,
-                      `${todaySessions.filter((session) => presentCount(session) === 0).length} turmas sem presenca registrada`,
-                    ].map((item) => (
-                      <div key={item} className="rounded-2xl bg-zinc-50 border border-zinc-200 p-4 text-sm font-medium text-zinc-700">
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
-            </div>
           </motion.div>
         )}
 
@@ -1341,6 +1296,76 @@ export const GymView: React.FC<GymViewProps> = ({ tenant, user }) => {
                   </ModalButton>
                 </div>
               </div>
+          </AppModal>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showRightDrawer && (
+          <AppModal
+            title="Checklist Fila de Links"
+            description="Visao resumida da operação em andamento para hoje."
+            icon={<LayoutList size={20} />}
+            onClose={() => setShowRightDrawer(false)}
+            maxWidthClassName="max-w-md"
+            bodyClassName="p-0 border-t border-zinc-100"
+          >
+            <div className="bg-zinc-50 p-6 space-y-6">
+              <div>
+                <h3 className="text-lg font-black text-zinc-900">Checklist operacional</h3>
+                <div className="space-y-3 mt-4">
+                  {[
+                    `${todaySessions.filter((session) => session.status === 'planned').length} turmas ainda precisam iniciar`,
+                    `${todaySessions.filter((session) => session.externalShareToken).length} turmas com formulario externo pronto`,
+                    `${todaySessions.filter((session) => presentCount(session) === 0).length} turmas sem presenca registrada`,
+                  ].map((item) => (
+                    <div key={item} className="rounded-xl bg-white border border-zinc-200 p-4 text-sm font-medium text-zinc-700 shadow-sm">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-black text-zinc-900">Fila de links externos</h3>
+                <p className="text-xs text-zinc-500 mt-1">Registros de presenca e leitura remota.</p>
+                <div className="space-y-4 mt-4">
+                  {activeShares.length === 0 && (
+                    <div className="rounded-xl bg-white border border-zinc-200 p-4 text-xs font-medium text-zinc-500">
+                      Nenhum formulario ativo no momento.
+                    </div>
+                  )}
+                  {activeShares.map((share) => {
+                    const session = data.sessions.find((item) => item.id === share.sessionId);
+                    if (!session) return null;
+                    return (
+                      <div key={share.token} className="rounded-xl bg-white border border-zinc-200 shadow-sm p-4 space-y-3">
+                        <div>
+                          <p className="font-bold text-sm text-zinc-900 leading-tight">{session.sectorName}</p>
+                          <p className="text-xs text-zinc-500 mt-0.5">{session.shiftName} · {session.startTime}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="rounded-lg bg-zinc-50 border border-zinc-200 p-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-400 mb-0.5">Respostas</p>
+                            <p className="font-black text-zinc-900 leading-none">{share.submissions}</p>
+                          </div>
+                          <div className="rounded-lg bg-zinc-50 border border-zinc-200 p-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-400 mb-0.5">Acessos</p>
+                            <p className="font-black text-zinc-900 leading-none">{share.opens}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => copyShareLink(share.token)}
+                          className="w-full py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
+                        >
+                          {copiedToken === share.token ? 'Link copiado' : 'Copiar link'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </AppModal>
         )}
       </AnimatePresence>
