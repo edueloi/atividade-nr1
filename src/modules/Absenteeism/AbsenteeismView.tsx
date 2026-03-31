@@ -337,7 +337,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                 >
                   <option value={1}>Janeiro</option>
                   <option value={2}>Fevereiro</option>
-                  <option value={3}>MarÃ§o</option>
+                  <option value={3}>Marco</option>
                   <option value={4}>Abril</option>
                   <option value={5}>Maio</option>
                   <option value={6}>Junho</option>
@@ -415,14 +415,14 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
               {/* Weekly Impact */}
-              <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+              <div className="lg:col-span-2 min-w-0 bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Impacto Semanal (Dias Perdidos)</h3>
                   <button className="p-2 hover:bg-zinc-50 rounded-xl transition-colors"><Download size={16} className="text-zinc-400" /></button>
                 </div>
-                <div className="h-[300px]">
+                <div className="h-[300px] min-w-0 min-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={summary.weeklyImpact}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f4f4f5" />
@@ -442,9 +442,9 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
               </div>
 
               {/* CID Distribution */}
-              <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+              <div className="min-w-0 bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
                 <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400 mb-6">Distribuição por CID</h3>
-                <div className="h-[240px]">
+                <div className="h-[240px] min-w-0 min-h-[240px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -592,7 +592,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
                             record.status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-600' : 
                             record.status === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-zinc-50 text-zinc-400'
                           }`}>
-                            {record.status === 'CONFIRMED' ? 'Confirmado' : record.status === 'PENDING' ? 'Pendente' : 'RevisÃ£o'}
+                            {record.status === 'CONFIRMED' ? 'Confirmado' : record.status === 'PENDING' ? 'Pendente' : 'Revisao'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -662,7 +662,7 @@ export const AbsenteeismView: React.FC<AbsenteeismViewProps> = ({ tenant, user }
             className="p-12 text-center bg-white rounded-3xl border border-zinc-200 shadow-sm"
           >
             <BarChart3 className="w-16 h-16 text-zinc-200 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-zinc-900">Análises AvanÃ§adas</h2>
+            <h2 className="text-xl font-bold text-zinc-900">Analises avancadas</h2>
             <p className="text-zinc-500 max-w-md mx-auto mt-2">
               Em breve: Drilldowns por setor, comparativos anuais e tendências preditivas de afastamento.
             </p>
@@ -1100,10 +1100,10 @@ const AbsenteeismDrawer: React.FC<{
               record.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700' : 
               record.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-500'
             }`}>
-              {record.status === 'CONFIRMED' ? 'Confirmado' : record.status === 'PENDING' ? 'Pendente' : 'RevisÃ£o'}
+              {record.status === 'CONFIRMED' ? 'Confirmado' : record.status === 'PENDING' ? 'Pendente' : 'Revisao'}
             </span>
           </div>
-          <p className="text-sm text-zinc-500">{record.sector_name} â€¢ {record.unit_name}</p>
+          <p className="text-sm text-zinc-500">{record.sector_name} | {record.unit_name}</p>
         </div>
       </div>
 
